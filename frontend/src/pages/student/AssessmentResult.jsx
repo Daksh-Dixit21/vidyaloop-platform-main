@@ -29,10 +29,10 @@ const getScoreGradient = (pct) => pct >= 76 ? 'from-green-400 to-emerald-500' : 
 export default function AssessmentResult() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { assessmentId, scores, overall_score, report_id } = location.state || {};
+  const { assessmentId, scores, overall_score: stateOverall, report_id: stateReportId } = location.state || {};
   const [downloading, setDownloading] = useState(false);
   const [fetching, setFetching] = useState(!scores && !!assessmentId);
-  const [result, setResult] = useState({ scores, overall_score, report_id });
+  const [result, setResult] = useState({ scores, overall_score: stateOverall, report_id: stateReportId });
 
   useEffect(() => {
     if (!scores && assessmentId) {
@@ -83,10 +83,10 @@ export default function AssessmentResult() {
 
 
   const handleViewReport = async () => {
-    if (!report_id) return;
+    if (!activeReportId) return;
     try {
-      const res = await reportAPI.viewReportBlob(report_id);
-      const type = res.headers['content-type'] || 'application/pdf';
+      const res = await reportAPI.viewReportBlob(activeReportId);
+      const type = res.headers['content-type'] || 'text/html';
       const url = window.URL.createObjectURL(new Blob([res.data], { type }));
       window.open(url, '_blank', 'noopener,noreferrer');
     } catch {
@@ -95,10 +95,10 @@ export default function AssessmentResult() {
   };
 
   const handleDownload = async () => {
-    if (!report_id) return;
+    if (!activeReportId) return;
     setDownloading(true);
     try {
-      const res = await reportAPI.downloadReport(report_id);
+      const res = await reportAPI.downloadReport(activeReportId);
       const url = window.URL.createObjectURL(new Blob([res.data]));
       const link = document.createElement('a');
       link.href = url;
@@ -128,10 +128,10 @@ export default function AssessmentResult() {
           <div className="w-32 h-32 mx-auto mb-4 relative">
             <svg className="w-full h-full -rotate-90" viewBox="0 0 120 120">
               <circle cx="60" cy="60" r="50" fill="none" stroke="#e5e7eb" strokeWidth="8" />
-              <circle cx="60" cy="60" r="50" fill="none" stroke={getScoreColor(overall_score)} strokeWidth="8" strokeLinecap="round" strokeDasharray={`${(overall_score / 100) * 314} 314`} className="score-ring" />
+              <circle cx="60" cy="60" r="50" fill="none" stroke={getScoreColor(activeOverall)} strokeWidth="8" strokeLinecap="round" strokeDasharray={`${(activeOverall / 100) * 314} 314`} className="score-ring" />
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-3xl font-bold" style={{ color: getScoreColor(overall_score) }}>{overall_score}%</span>
+              <span className="text-3xl font-bold" style={{ color: getScoreColor(activeOverall) }}>{activeOverall}%</span>
             </div>
           </div>
           <p className="text-gray-400 text-sm">22 Dimensions Analyzed</p>
@@ -246,7 +246,7 @@ export default function AssessmentResult() {
           </button>
           <button
             onClick={handleDownload}
-            disabled={downloading || !report_id}
+            disabled={downloading || !activeReportId}
             className="flex-1 py-3.5 text-sm font-medium text-gray-600 bg-white rounded-xl border hover:bg-gray-50 transition disabled:opacity-40"
           >
             {downloading ? 'Downloading...' : '⬇ Download PDF'}

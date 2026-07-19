@@ -200,9 +200,9 @@ export default function SchoolDashboard() {
       </nav>
 
       <div className="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
-        <div className="flex gap-1 sm:gap-2 mb-4 sm:mb-6 border-b overflow-x-auto -mx-3 sm:mx-0 px-3 sm:px-0">
+        <div className="flex flex-wrap gap-1.5 sm:gap-2 mb-4 sm:mb-6 border-b pb-2 sm:pb-0 -mx-3 sm:mx-0 px-3 sm:px-0">
           {tabs.map(tab => (
-            <button key={tab.key} onClick={() => setActiveTab(tab.key)} className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium border-b-2 whitespace-nowrap transition ${activeTab === tab.key ? 'border-[#4EC0F4] text-[#4EC0F4]' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>{tab.label}</button>
+            <button key={tab.key} onClick={() => setActiveTab(tab.key)} className={`px-2.5 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium rounded-lg sm:rounded-none sm:border-b-2 whitespace-nowrap transition ${activeTab === tab.key ? 'bg-[#4EC0F4]/10 text-[#4EC0F4] sm:bg-transparent sm:border-[#4EC0F4]' : 'bg-gray-100 text-gray-600 sm:bg-transparent sm:border-transparent hover:text-gray-700 sm:hover:bg-transparent'}`}>{tab.label}</button>
           ))}
         </div>
 

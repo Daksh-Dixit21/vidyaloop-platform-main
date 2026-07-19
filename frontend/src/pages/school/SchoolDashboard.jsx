@@ -2,14 +2,14 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { adminAPI, reportAPI } from '../../services/api';
 import { useNavigate } from 'react-router-dom';
-import { Download, Eye, FileUp, Filter, LogOut, Pencil, RefreshCw, Save, Search, Upload } from 'lucide-react';
+import { Download, Eye, FileUp, Filter, LogOut, Pencil, RefreshCw, Save, Search, Upload, Plus, Trash2, FileText, DownloadCloud } from 'lucide-react';
 
 const tabs = [
   { key: 'overview', label: 'Overview' },
   { key: 'schools', label: 'Schools' },
   { key: 'students', label: 'Students' },
+  { key: 'attempts', label: 'Attempts' },
   { key: 'assessments', label: 'Assessments' },
-  { key: 'questions', label: 'Question Bank' },
   { key: 'credentials', label: 'Credentials' },
 ];
 
@@ -42,6 +42,7 @@ export default function SchoolDashboard() {
   const [assessments, setAssessments] = useState([]);
   const [credentials, setCredentials] = useState([]);
   const [questions, setQuestions] = useState([]);
+  const [assessmentConfigs, setAssessmentConfigs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [uploadMsg, setUploadMsg] = useState('');
@@ -50,6 +51,7 @@ export default function SchoolDashboard() {
   const [filters, setFilters] = useState({ search: '', class_filter: '', school_id: '', status: '' });
   const [questionSection, setQuestionSection] = useState('');
   const [editingQuestion, setEditingQuestion] = useState(null);
+  const [selectedAssessmentId, setSelectedAssessmentId] = useState(null);
   const fileInputRef = useRef(null);
   const questionFileRef = useRef(null);
 
@@ -60,25 +62,27 @@ export default function SchoolDashboard() {
 
   useEffect(() => { loadData(); }, []);
   useEffect(() => {
-    if (activeTab === 'students' || activeTab === 'assessments') loadFilteredData();
+    if (activeTab === 'students' || activeTab === 'attempts') loadFilteredData();
   }, [activeTab, filters.school_id, filters.class_filter, filters.status]);
-  useEffect(() => { if (activeTab === 'questions') loadQuestions(); }, [questionSection, activeTab]);
+  useEffect(() => { if (activeTab === 'assessments') loadQuestions(); }, [questionSection, activeTab, selectedAssessmentId]);
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const [statsRes, schoolsRes, studentsRes, assessmentsRes, credentialsRes] = await Promise.all([
+      const [statsRes, schoolsRes, studentsRes, assessmentsRes, credentialsRes, configsRes] = await Promise.all([
         adminAPI.getDashboard(),
         adminAPI.getSchools(),
         adminAPI.getStudents({ limit: 20 }),
         adminAPI.getAssessments({ limit: 20 }),
         adminAPI.getCredentials(),
+        adminAPI.getAssessmentConfigs(),
       ]);
       setStats(statsRes.data);
       setSchools(schoolsRes.data.schools || []);
       setStudents(studentsRes.data.students || []);
       setAssessments(assessmentsRes.data.assessments || []);
       setCredentials(credentialsRes.data.batches || []);
+      setAssessmentConfigs(configsRes.data.configs || []);
     } catch (err) {
       console.error('Failed to load dashboard:', err);
     } finally {
@@ -108,7 +112,9 @@ export default function SchoolDashboard() {
 
   const loadQuestions = async () => {
     try {
-      const res = await adminAPI.getQuestionBank({ section: questionSection || undefined });
+      const params = { section: questionSection || undefined };
+      if (selectedAssessmentId) params.assessment_id = selectedAssessmentId;
+      const res = await adminAPI.getQuestionBank(params);
       setQuestions(res.data.questions || []);
     } catch (err) {
       console.error('Failed to load questions:', err);
@@ -143,9 +149,10 @@ export default function SchoolDashboard() {
     const formData = new FormData();
     formData.append('file', file);
     try {
-      const res = await adminAPI.uploadQuestionBank(formData);
+      const res = await adminAPI.uploadQuestionBank(formData, selectedAssessmentId || undefined);
       setQuestionUploadMsg(`${res.data.saved} questions saved${res.data.errors?.length ? `, ${res.data.errors.length} rows skipped` : ''}.`);
       await loadQuestions();
+      await loadData();
     } catch (err) {
       const detail = err.response?.data?.detail;
       setQuestionUploadMsg(`Error: ${detail?.message || detail || 'Question upload failed'}`);
@@ -242,7 +249,7 @@ export default function SchoolDashboard() {
           </div>
         )}
 
-        {(activeTab === 'students' || activeTab === 'assessments') && (
+        {(activeTab === 'students' || activeTab === 'attempts') && (
           <div className="space-y-3 sm:space-y-4">
             <form onSubmit={applySearch} className="bg-white rounded-xl shadow-sm border border-gray-100 p-3 sm:p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 sm:gap-3">
               <div className="relative sm:col-span-2"><Search size={14} className="absolute left-3 top-2.5 text-gray-400" /><input value={filters.search} onChange={(e) => setFilters({ ...filters, search: e.target.value })} placeholder="Search students" className="w-full pl-8 pr-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-cyan-100" /></div>
@@ -252,30 +259,30 @@ export default function SchoolDashboard() {
             </form>
 
             {activeTab === 'students' && <StudentsTable students={students} />}
-            {activeTab === 'assessments' && <AssessmentsTable assessments={assessments} filters={filters} setFilters={setFilters} />}
+            {activeTab === 'attempts' && <AssessmentsTable assessments={assessments} filters={filters} setFilters={setFilters} />}
           </div>
         )}
 
-        {activeTab === 'questions' && (
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-3 sm:gap-4">
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-              <div className="p-3 sm:p-4 border-b flex flex-col sm:flex-row gap-2 sm:gap-3 sm:items-center sm:justify-between">
-                <div className="min-w-0"><h3 className="font-semibold text-gray-800 text-sm sm:text-base">Question Bank</h3><p className="text-[10px] sm:text-xs text-gray-400">Upload CSV, Excel, or JSON. Edit question text inline.</p></div>
-                <div className="flex gap-2 flex-wrap">
-                  <select value={questionSection} onChange={(e) => setQuestionSection(e.target.value)} className="px-2 sm:px-3 py-1.5 sm:py-2 border rounded-lg text-xs sm:text-sm flex-1 sm:flex-none"><option value="">All sections</option>{Object.entries(sectionNames).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select>
-                  <input ref={questionFileRef} type="file" accept=".csv,.xlsx,.xls,.json" className="hidden" onChange={handleQuestionUpload} id="question-upload" />
-                  <label htmlFor="question-upload" className="inline-flex items-center gap-1.5 px-3 py-1.5 sm:py-2 bg-gray-900 text-white rounded-lg text-xs sm:text-sm cursor-pointer"><Upload size={14} /> Upload</label>
-                </div>
-              </div>
-              {questionUploadMsg && <div className={`mx-3 sm:mx-4 mt-3 sm:mt-4 p-2 sm:p-3 rounded-lg text-xs sm:text-sm ${questionUploadMsg.startsWith('Error') ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>{questionUploadMsg}</div>}
-              <div className="divide-y max-h-[400px] sm:max-h-[640px] overflow-auto">{questions.map((q) => <button key={q._id} onClick={() => setEditingQuestion(q._id)} className={`w-full text-left p-3 sm:p-4 hover:bg-gray-50 ${editingQuestion === q._id ? 'bg-cyan-50' : ''}`}><div className="flex justify-between gap-2"><p className="text-xs sm:text-sm font-medium text-gray-800 line-clamp-2">{q.text}</p><Pencil size={13} className="text-gray-400 shrink-0 mt-0.5" /></div><p className="text-[10px] sm:text-xs text-gray-400 mt-0.5">{sectionNames[q.section] || q.section} / {q.dimension} / {q.question_type}</p></button>)}</div>
-            </div>
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-3 sm:p-4 h-fit">
-              <h3 className="font-semibold text-gray-800 mb-2 sm:mb-3 text-sm sm:text-base">Edit Question</h3>
-              {selectedQuestion ? <div className="space-y-2 sm:space-y-3"><p className="text-[10px] sm:text-xs text-gray-400 break-all">{selectedQuestion._id}</p><textarea id="question-text" defaultValue={selectedQuestion.text} className="w-full min-h-32 sm:min-h-40 border rounded-lg p-2 sm:p-3 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-cyan-100" /><button onClick={saveQuestion} className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 bg-[#4EC0F4] text-white rounded-lg text-xs sm:text-sm font-semibold"><Save size={14} /> Save Question</button></div> : <p className="text-xs sm:text-sm text-gray-400">Select a question to edit it.</p>}
-            </div>
-          </div>
-        )}
+        {activeTab === 'assessments' && <AssessmentsManager
+          assessmentConfigs={assessmentConfigs}
+          setAssessmentConfigs={setAssessmentConfigs}
+          questions={questions}
+          editingQuestion={editingQuestion}
+          setEditingQuestion={setEditingQuestion}
+          selectedQuestion={selectedQuestion}
+          questionSection={questionSection}
+          setQuestionSection={setQuestionSection}
+          questionUploadMsg={questionUploadMsg}
+          questionFileRef={questionFileRef}
+          handleQuestionUpload={handleQuestionUpload}
+          saveQuestion={saveQuestion}
+          loadQuestions={loadQuestions}
+          loadData={loadData}
+          setActiveTab={setActiveTab}
+          setUploadMsg={setUploadMsg}
+          selectedAssessmentId={selectedAssessmentId}
+          setSelectedAssessmentId={setSelectedAssessmentId}
+        />}
 
         {activeTab === 'credentials' && (
           <div className="space-y-3 sm:space-y-4">
@@ -448,6 +455,131 @@ function AssessmentsTable({ assessments, filters, setFilters }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function AssessmentsManager({ assessmentConfigs, setAssessmentConfigs, questions, editingQuestion, setEditingQuestion, selectedQuestion, questionSection, setQuestionSection, questionUploadMsg, questionFileRef, handleQuestionUpload, saveQuestion, loadQuestions, loadData, setActiveTab, setUploadMsg, selectedAssessmentId, setSelectedAssessmentId }) {
+  const [newName, setNewName] = useState('');
+  const [newType, setNewType] = useState('comprehensive');
+  const [creating, setCreating] = useState(false);
+
+  const createAssessment = async () => {
+    if (!newName.trim()) return;
+    setCreating(true);
+    try {
+      const res = await adminAPI.createAssessmentConfig({ name: newName.trim(), assessment_type: newType });
+      setAssessmentConfigs(prev => [res.data.config, ...prev]);
+      setNewName('');
+      setSelectedAssessmentId(res.data.config._id);
+    } catch (err) {
+      alert(err.response?.data?.detail || 'Failed to create assessment');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const deleteConfig = async (id) => {
+    if (!confirm('Delete this assessment config? Questions will be unassigned.')) return;
+    try {
+      await adminAPI.deleteAssessmentConfig(id);
+      setAssessmentConfigs(prev => prev.filter(c => c._id !== id));
+      if (selectedAssessmentId === id) setSelectedAssessmentId(null);
+    } catch (err) {
+      alert(err.response?.data?.detail || 'Failed to delete assessment');
+    }
+  };
+
+  const filteredQuestions = questions.filter(q =>
+    selectedAssessmentId ? q.assessment_id === selectedAssessmentId : !q.assessment_id
+  );
+
+  const downloadCsvTemplate = () => {
+    const header = 'id,section,dimension,text,question_type,options,correct_answer,reverse_scored,weight,assessment_id';
+    const rows = [
+      'q_example_1,personality,curiosity,"I enjoy trying new things",likert_5,,,,,',
+      'q_example_2,skills_abilities,verbal_ability,"Choose the synonym of candid",multiple_choice,"Frank|Silent|Late|Careful",a,,,',
+      'q_example_3,learning_style,visual_learning,"I learn best by watching",likert_5,,,,,',
+      'q_example_4,career_interests,investigative,"I enjoy solving puzzles",likert_5,,,,,',
+    ];
+    const csv = [header, ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'vidyaloop_question_template.csv';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr_360px] gap-3 sm:gap-4">
+      {/* Left: Assessment configs */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="p-3 sm:p-4 border-b">
+          <h3 className="font-semibold text-gray-800 text-sm sm:text-base">Assessment Configs</h3>
+        </div>
+        <div className="p-3 sm:p-4 border-b space-y-2">
+          <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Assessment name" className="w-full px-3 py-1.5 border rounded-lg text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-cyan-100" />
+          <div className="flex gap-2">
+            <select value={newType} onChange={(e) => setNewType(e.target.value)} className="flex-1 px-2 py-1.5 border rounded-lg text-xs sm:text-sm">
+              <option value="comprehensive">Comprehensive</option>
+              <option value="personality">Personality</option>
+              <option value="skills">Skills</option>
+              <option value="custom">Custom</option>
+            </select>
+            <button onClick={createAssessment} disabled={creating || !newName.trim()} className="inline-flex items-center gap-1 px-3 py-1.5 bg-[#4EC0F4] text-white rounded-lg text-xs sm:text-sm font-medium disabled:opacity-50"><Plus size={14} /> {creating ? '...' : 'Create'}</button>
+          </div>
+        </div>
+        <div className="divide-y max-h-[300px] overflow-auto">
+          {assessmentConfigs.length === 0 && <p className="p-4 text-xs text-gray-400 text-center">No assessments yet</p>}
+          {assessmentConfigs.map(c => (
+            <div key={c._id} className={`flex items-center justify-between p-3 sm:p-4 cursor-pointer hover:bg-gray-50 ${selectedAssessmentId === c._id ? 'bg-cyan-50' : ''}`} onClick={() => setSelectedConfig(c._id)}>
+              <div className="min-w-0">
+                <p className="font-medium text-xs sm:text-sm text-gray-800 truncate">{c.name}</p>
+                <p className="text-[10px] sm:text-xs text-gray-400">{c.assessment_type} &middot; {c.question_count || 0} questions</p>
+              </div>
+              <button onClick={(e) => { e.stopPropagation(); deleteConfig(c._id); }} className="p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-500 shrink-0"><Trash2 size={13} /></button>
+            </div>
+          ))}
+        </div>
+        <div className="p-3 sm:p-4 border-t">
+          <button onClick={() => setSelectedConfig(null)} className={`w-full text-left px-3 py-2 rounded-lg text-xs sm:text-sm ${!selectedAssessmentId ? 'bg-cyan-50 text-cyan-700 font-medium' : 'text-gray-500 hover:bg-gray-50'}`}>Unassigned Questions</button>
+        </div>
+      </div>
+
+      {/* Center: Questions list */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="p-3 sm:p-4 border-b flex flex-col sm:flex-row gap-2 sm:gap-3 sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <h3 className="font-semibold text-gray-800 text-sm sm:text-base">
+              {selectedAssessmentId
+                ? (assessmentConfigs.find(c => c._id === selectedAssessmentId)?.name || 'Assessment') + ' Questions'
+                : 'Unassigned Questions'}
+              <span className="text-gray-400 font-normal ml-1">({filteredQuestions.length})</span>
+            </h3>
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            <select value={questionSection} onChange={(e) => setQuestionSection(e.target.value)} className="px-2 sm:px-3 py-1.5 sm:py-2 border rounded-lg text-xs sm:text-sm flex-1 sm:flex-none"><option value="">All sections</option>{Object.entries(sectionNames).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select>
+            <input ref={questionFileRef} type="file" accept=".csv,.xlsx,.xls,.json" className="hidden" onChange={handleQuestionUpload} id="question-upload" />
+            <label htmlFor="question-upload" className="inline-flex items-center gap-1.5 px-3 py-1.5 sm:py-2 bg-gray-900 text-white rounded-lg text-xs sm:text-sm cursor-pointer"><Upload size={14} /> Upload</label>
+            <button onClick={downloadCsvTemplate} className="inline-flex items-center gap-1.5 px-3 py-1.5 sm:py-2 border rounded-lg text-xs sm:text-sm text-gray-600 hover:bg-gray-50"><DownloadCloud size={14} /> Template</button>
+          </div>
+        </div>
+        {questionUploadMsg && <div className={`mx-3 sm:mx-4 mt-3 sm:mt-4 p-2 sm:p-3 rounded-lg text-xs sm:text-sm ${questionUploadMsg.startsWith('Error') ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>{questionUploadMsg}</div>}
+        <div className="divide-y max-h-[400px] sm:max-h-[600px] overflow-auto">
+          {filteredQuestions.length === 0 && <p className="p-4 text-xs text-gray-400 text-center">No questions. Upload a CSV/Excel file or create a new assessment.</p>}
+          {filteredQuestions.map((q) => <button key={q._id} onClick={() => setEditingQuestion(q._id)} className={`w-full text-left p-3 sm:p-4 hover:bg-gray-50 ${editingQuestion === q._id ? 'bg-cyan-50' : ''}`}><div className="flex justify-between gap-2"><p className="text-xs sm:text-sm font-medium text-gray-800 line-clamp-2">{q.text}</p><Pencil size={13} className="text-gray-400 shrink-0 mt-0.5" /></div><p className="text-[10px] sm:text-xs text-gray-400 mt-0.5">{sectionNames[q.section] || q.section} / {q.dimension} / {q.question_type}</p></button>)}
+        </div>
+      </div>
+
+      {/* Right: Edit question */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-3 sm:p-4 h-fit">
+        <h3 className="font-semibold text-gray-800 mb-2 sm:mb-3 text-sm sm:text-base">Edit Question</h3>
+        {selectedQuestion ? <div className="space-y-2 sm:space-y-3"><p className="text-[10px] sm:text-xs text-gray-400 break-all">{selectedQuestion._id}</p><textarea id="question-text" defaultValue={selectedQuestion.text} className="w-full min-h-32 sm:min-h-40 border rounded-lg p-2 sm:p-3 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-cyan-100" /><button onClick={saveQuestion} className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 bg-[#4EC0F4] text-white rounded-lg text-xs sm:text-sm font-semibold"><Save size={14} /> Save Question</button></div> : <p className="text-xs sm:text-sm text-gray-400">Select a question to edit it.</p>}
+      </div>
     </div>
   );
 }

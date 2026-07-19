@@ -9,6 +9,7 @@ from fastapi.responses import StreamingResponse
 
 from config import UPLOAD_MAX_BYTES
 from database import (
+    assessment_configs_collection,
     assessments_collection,
     credentials_collection,
     question_banks_collection,
@@ -75,6 +76,7 @@ def clean_question(row):
     if question_type == 'multiple_choice' and not options:
         raise ValueError("Multiple-choice questions need options")
 
+    assessment_id_val = str(normalized.get('assessment_id', '')).strip() or None
     return {
         "_id": str(normalized.get('_id') or normalized.get('id') or f"q_{uuid.uuid4().hex[:10]}").strip(),
         "section": section,
@@ -85,6 +87,7 @@ def clean_question(row):
         "correct_answer": str(normalized.get('correct_answer', '')).strip() or None,
         "reverse_scored": parse_bool(normalized.get('reverse_scored', False)),
         "weight": float(normalized.get('weight') or 1.0),
+        "assessment_id": assessment_id_val,
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -288,14 +291,18 @@ async def get_assessment_taker(assessment_id: str, user=Depends(require_admin)):
 
 
 @router.get("/question-bank")
-async def list_question_bank(section: str = "", user=Depends(require_admin)):
-    query = {"section": section} if section else {}
+async def list_question_bank(section: str = "", assessment_id: str = "", user=Depends(require_admin)):
+    query = {}
+    if section:
+        query["section"] = section
+    if assessment_id:
+        query["assessment_id"] = assessment_id
     questions = await question_banks_collection.find(query).sort([("section", 1), ("dimension", 1)]).to_list(500)
     return {"sections": SECTIONS, "questions": [serialize_doc(q) for q in questions]}
 
 
 @router.post("/question-bank/upload")
-async def upload_question_bank(file: UploadFile = File(...), user=Depends(require_admin)):
+async def upload_question_bank(file: UploadFile = File(...), assessment_id: str = "", user=Depends(require_admin)):
     content = await read_upload(file)
     if file.filename.lower().endswith('.json'):
         data = json.loads(content.decode('utf-8-sig'))
@@ -313,10 +320,16 @@ async def upload_question_bank(file: UploadFile = File(...), user=Depends(requir
     for idx, row in enumerate(rows):
         try:
             question = clean_question(row)
+            if assessment_id:
+                question['assessment_id'] = assessment_id
             await question_banks_collection.update_one({"_id": question['_id']}, {"$set": question}, upsert=True)
             upserted += 1
         except Exception as exc:
             errors.append(f"Row {idx + 2}: {exc}")
+
+    if assessment_id:
+        count = await question_banks_collection.count_documents({"assessment_id": assessment_id})
+        await assessment_configs_collection.update_one({"_id": assessment_id}, {"$set": {"question_count": count, "updated_at": datetime.now(timezone.utc).isoformat()}})
 
     if upserted == 0:
         raise HTTPException(status_code=400, detail={"message": "No valid questions found", "errors": errors})
@@ -335,6 +348,63 @@ async def update_question(question_id: str, body: dict, user=Depends(require_adm
         raise HTTPException(status_code=400, detail=str(exc))
     await question_banks_collection.update_one({"_id": question_id}, {"$set": question})
     return {"question": serialize_doc(question)}
+
+
+@router.get("/assessment-configs")
+async def list_assessment_configs(user=Depends(require_admin)):
+    configs = await assessment_configs_collection.find().sort("created_at", -1).to_list(50)
+    return {"configs": [serialize_doc(c) for c in configs]}
+
+
+@router.post("/assessment-configs")
+async def create_assessment_config(body: dict, user=Depends(require_admin)):
+    name = body.get('name', '').strip()
+    assessment_type = body.get('assessment_type', 'comprehensive').strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Assessment name is required")
+    existing = await assessment_configs_collection.find_one({"name": name})
+    if existing:
+        raise HTTPException(status_code=409, detail="An assessment with this name already exists")
+    config_id = f"acfg_{uuid.uuid4().hex[:12]}"
+    doc = {
+        "_id": config_id,
+        "name": name,
+        "assessment_type": assessment_type,
+        "question_count": 0,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await assessment_configs_collection.insert_one(doc)
+    return {"config": serialize_doc(doc)}
+
+
+@router.put("/assessment-configs/{config_id}")
+async def update_assessment_config(config_id: str, body: dict, user=Depends(require_admin)):
+    existing = await assessment_configs_collection.find_one({"_id": config_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Assessment config not found")
+    updates = {}
+    if body.get('name'):
+        updates['name'] = body['name'].strip()
+    if body.get('assessment_type'):
+        updates['assessment_type'] = body['assessment_type'].strip()
+    updates['updated_at'] = datetime.now(timezone.utc).isoformat()
+    await assessment_configs_collection.update_one({"_id": config_id}, {"$set": updates})
+    updated = await assessment_configs_collection.find_one({"_id": config_id})
+    return {"config": serialize_doc(updated)}
+
+
+@router.delete("/assessment-configs/{config_id}")
+async def delete_assessment_config(config_id: str, user=Depends(require_admin)):
+    existing = await assessment_configs_collection.find_one({"_id": config_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Assessment config not found")
+    await question_banks_collection.update_many(
+        {"assessment_id": config_id},
+        {"$unset": {"assessment_id": ""}}
+    )
+    await assessment_configs_collection.delete_one({"_id": config_id})
+    return {"message": "Assessment config deleted"}
 
 
 @router.get("/dashboard")

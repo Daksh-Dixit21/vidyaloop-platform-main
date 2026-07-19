@@ -19,6 +19,7 @@ assessments_collection = db['assessments']
 reports_collection = db['reports']
 question_banks_collection = db['question_banks']
 credentials_collection = db['credentials']
+assessment_configs_collection = db['assessment_configs']
 
 async def init_db():
     await users_collection.create_index('email', unique=True)
@@ -33,6 +34,8 @@ async def init_db():
     await reports_collection.create_index('assessment_id', unique=True)
     await reports_collection.create_index('student_id')
     await question_banks_collection.create_index([('section', 1), ('dimension', 1)])
+    await question_banks_collection.create_index('assessment_id')
+    await assessment_configs_collection.create_index('name', unique=True)
 
 async def close_db():
     client.close()

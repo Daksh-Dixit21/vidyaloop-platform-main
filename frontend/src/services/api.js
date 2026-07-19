@@ -43,7 +43,7 @@ export const adminAPI = {
   previewCSV: (formData) => api.post('/api/admin/preview-csv', formData, {
     headers: { 'Content-Type': 'multipart/form-data' }
   }),
-  uploadQuestionBank: (formData) => api.post('/api/admin/question-bank/upload', formData, {
+  uploadQuestionBank: (formData, assessment_id) => api.post(`/api/admin/question-bank/upload${assessment_id ? `?assessment_id=${assessment_id}` : ''}`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' }
   }),
   getSchools: (params) => api.get('/api/admin/schools', { params }),
@@ -56,6 +56,10 @@ export const adminAPI = {
   getQuestionBank: (params) => api.get('/api/admin/question-bank', { params }),
   updateQuestion: (id, data) => api.put(`/api/admin/question-bank/${id}`, data),
   getDashboard: () => api.get('/api/admin/dashboard'),
+  getAssessmentConfigs: () => api.get('/api/admin/assessment-configs'),
+  createAssessmentConfig: (data) => api.post('/api/admin/assessment-configs', data),
+  updateAssessmentConfig: (id, data) => api.put(`/api/admin/assessment-configs/${id}`, data),
+  deleteAssessmentConfig: (id) => api.delete(`/api/admin/assessment-configs/${id}`),
 };
 
 export const studentAPI = {

@@ -168,15 +168,12 @@ async def save_section(assessment_id: str, body: dict, user=Depends(require_stud
         "growth_areas": section_scores.get("growth_areas", []),
     }
 
-    all_done = all(progress.values())
-
     await assessments_collection.update_one(
         {"_id": assessment_id},
         {"$set": {
             "answers": all_answers,
             "progress": progress,
             "section_scores": section_scores_map,
-            "status": "in_progress" if not all_done else "completed",
         }}
     )
 
@@ -184,7 +181,7 @@ async def save_section(assessment_id: str, body: dict, user=Depends(require_stud
         "message": f"Section '{section_key}' saved",
         "progress": progress,
         "section_scores": section_scores_map.get(section_key, {}),
-        "all_complete": all_done,
+        "all_complete": all(progress.values()),
     }
 
 

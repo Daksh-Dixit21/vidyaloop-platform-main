@@ -173,6 +173,25 @@ export default function SchoolDashboard() {
     window.URL.revokeObjectURL(url);
   };
 
+  const downloadStudentTemplate = () => {
+    const header = 'name,class,section,roll_number,email,gender';
+    const rows = [
+      'Aarav Sharma,10,A,DEMO001,,',
+      'Priya Singh,9,B,DEMO002,,',
+      'Rohan Mehta,11,C,DEMO003,,',
+    ];
+    const csv = [header, ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'vidyaloop_student_upload_template.csv';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  };
+
   const saveQuestion = async () => {
     if (!selectedQuestion) return;
     const text = document.getElementById('question-text').value;
@@ -289,8 +308,11 @@ export default function SchoolDashboard() {
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 sm:p-6">
               <h3 className="font-semibold text-gray-800 mb-1 sm:mb-2 text-sm sm:text-base">Upload Students</h3>
               <p className="text-xs sm:text-sm text-gray-500 mb-3 sm:mb-4">Upload CSV or Excel with columns: name, class, section, roll_number, email, gender. Student accounts are seeded into MongoDB and a credential CSV is generated.</p>
-              <input ref={fileInputRef} type="file" accept=".csv,.xlsx,.xls" onChange={handleStudentUpload} className="hidden" id="student-upload" />
-              <label htmlFor="student-upload" className="inline-flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-3 bg-gradient-to-r from-[#4EC0F4] to-blue-500 text-white rounded-lg sm:rounded-xl font-semibold text-xs sm:text-sm cursor-pointer w-full sm:w-auto justify-center"><FileUp size={16} /> {uploading ? 'Uploading...' : 'Upload student file'}</label>
+              <div className="flex flex-wrap gap-2">
+                <input ref={fileInputRef} type="file" accept=".csv,.xlsx,.xls" onChange={handleStudentUpload} className="hidden" id="student-upload" />
+                <label htmlFor="student-upload" className="inline-flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-3 bg-gradient-to-r from-[#4EC0F4] to-blue-500 text-white rounded-lg sm:rounded-xl font-semibold text-xs sm:text-sm cursor-pointer justify-center"><FileUp size={16} /> {uploading ? 'Uploading...' : 'Upload file'}</label>
+                <button onClick={downloadStudentTemplate} className="inline-flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-lg sm:rounded-xl text-xs sm:text-sm text-gray-600 hover:bg-gray-50 font-medium"><DownloadCloud size={16} /> Template</button>
+              </div>
               {uploadMsg && <div className={`mt-3 sm:mt-4 p-2 sm:p-3 rounded-lg text-xs sm:text-sm ${uploadMsg.startsWith('Error') ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>{uploadMsg}</div>}
             </div>
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">

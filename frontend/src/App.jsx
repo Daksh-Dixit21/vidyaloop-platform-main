@@ -32,8 +32,6 @@ function ProtectedRoute({ children, requiredRole }) {
 }
 
 function AppRoutes() {
-  const { user } = useAuth();
-
   return (
     <Routes>
       <Route path="/" element={<Homepage />} />
@@ -63,10 +61,13 @@ function AppRoutes() {
       <Route path="/student/dashboard" element={
         <ProtectedRoute requiredRole="student"><StudentDashboard /></ProtectedRoute>
       } />
-      <Route path="/assessment" element={
+      <Route path="/personality-assessment/start" element={<Navigate to="/student/assessment" />} />
+      <Route path="/future-readiness-assessment/start" element={<Navigate to="/student/assessment" />} />
+
+      <Route path="/student/assessment" element={
         <ProtectedRoute requiredRole="student"><AssessmentQuiz /></ProtectedRoute>
       } />
-      <Route path="/assessment/result" element={
+      <Route path="/student/assessment/result" element={
         <ProtectedRoute requiredRole="student"><AssessmentResult /></ProtectedRoute>
       } />
     </Routes>
@@ -87,3 +88,5 @@ function App() {
 }
 
 export default App;
+
+

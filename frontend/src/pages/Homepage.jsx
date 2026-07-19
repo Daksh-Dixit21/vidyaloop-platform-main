@@ -94,19 +94,22 @@ const Homepage = () => {
 
       {/* Navigation */}
       <nav className={`fixed left-0 right-0 bg-white/80 backdrop-blur-lg border-b border-gray-100 z-40 transition-all ${showBetaBanner ? 'top-[64px] sm:top-[52px]' : 'top-0'}`}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-8 py-2 sm:py-3">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-1.5 sm:py-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center">
-              <img src="/vidyaloop-logo.png" alt="VidyaLoop" className="h-16 sm:h-20 lg:h-28" />
+              <img src="/vidyaloop-logo.png" alt="VidyaLoop" className="h-10 sm:h-12 lg:h-14" />
             </div>
-            <div className="flex items-center gap-3 sm:gap-6">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <Link to="/student/login" className="px-3 sm:px-4 py-1.5 sm:py-2 text-sm font-medium text-gray-600 hover:text-[#4EC0F4] hover:bg-blue-50 rounded-lg transition-all">
+                Login
+              </Link>
               <Link 
                 to="/dashboard"
-                className="px-4 sm:px-7 py-2 sm:py-2.5 text-white rounded-lg sm:rounded-xl font-semibold hover:shadow-xl hover:scale-105 transition-all duration-300 text-sm sm:text-base flex items-center gap-2"
+                className="px-3 sm:px-5 py-1.5 sm:py-2 text-white rounded-lg font-semibold hover:shadow-lg hover:scale-105 transition-all duration-300 text-xs sm:text-sm flex items-center gap-1.5"
                 style={{background: '#4EC0F4'}}
               >
-                <span>Explore Dashboard</span>
-                <ArrowRight className="w-4 h-4" />
+                <span>Dashboard</span>
+                <ArrowRight className="w-3.5 h-3.5" />
               </Link>
             </div>
           </div>

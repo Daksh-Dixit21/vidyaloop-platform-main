@@ -24,7 +24,11 @@ async def init_db():
     await users_collection.create_index('email', unique=True)
     await students_collection.create_index('user_id')
     await students_collection.create_index('school_id')
+    await students_collection.create_index([('school_id', 1), ('class_level', 1)])
+    await schools_collection.create_index('name')
     await assessments_collection.create_index('student_id')
+    await assessments_collection.create_index('school_id')
+    await assessments_collection.create_index('status')
     await assessments_collection.create_index([('student_id', 1), ('assessment_type', 1)])
     await reports_collection.create_index('assessment_id', unique=True)
     await reports_collection.create_index('student_id')
@@ -32,3 +36,4 @@ async def init_db():
 
 async def close_db():
     client.close()
+

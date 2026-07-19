@@ -46,7 +46,9 @@ export function AuthProvider({ children }) {
 
   const changePassword = async (currentPassword, newPassword) => {
     await authAPI.changePassword(currentPassword, newPassword);
-    setUser(prev => ({ ...prev, first_login: false }));
+    const updated = { ...user, first_login: false };
+    setUser(updated);
+    localStorage.setItem('vidyaloop_user', JSON.stringify(updated));
   };
 
   return (

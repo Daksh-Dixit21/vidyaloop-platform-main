@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 const api = axios.create({
   baseURL: API_BASE,
@@ -19,9 +19,10 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
+      const role = JSON.parse(localStorage.getItem('vidyaloop_user') || '{}').role;
       localStorage.removeItem('vidyaloop_token');
       localStorage.removeItem('vidyaloop_user');
-      window.location.href = '/student/login';
+      window.location.href = role === 'school_admin' ? '/school/login' : '/student/login';
     }
     return Promise.reject(error);
   }
@@ -42,9 +43,18 @@ export const adminAPI = {
   previewCSV: (formData) => api.post('/api/admin/preview-csv', formData, {
     headers: { 'Content-Type': 'multipart/form-data' }
   }),
+  uploadQuestionBank: (formData) => api.post('/api/admin/question-bank/upload', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }),
+  getSchools: (params) => api.get('/api/admin/schools', { params }),
   getStudents: (params) => api.get('/api/admin/students', { params }),
   getStudent: (id) => api.get(`/api/admin/students/${id}`),
   getCredentials: () => api.get('/api/admin/credentials'),
+  downloadCredentials: (batchId) => api.get(`/api/admin/credentials/${batchId}/download`, { responseType: 'blob' }),
+  getAssessments: (params) => api.get('/api/admin/assessments', { params }),
+  getAssessmentTaker: (id) => api.get(`/api/admin/assessments/${id}/takers`),
+  getQuestionBank: (params) => api.get('/api/admin/question-bank', { params }),
+  updateQuestion: (id, data) => api.put(`/api/admin/question-bank/${id}`, data),
   getDashboard: () => api.get('/api/admin/dashboard'),
 };
 
@@ -69,7 +79,12 @@ export const assessmentAPI = {
 export const reportAPI = {
   getReport: (id) => api.get(`/api/reports/${id}`),
   downloadReport: (id) => api.get(`/api/reports/${id}/download`, { responseType: 'blob' }),
-  viewReport: (id) => `${API_BASE}/api/reports/${id}/view`,
+  viewReportBlob: (id) => api.get(`/api/reports/${id}/view`, { responseType: 'blob' }),
 };
 
 export default api;
+
+
+
+
+

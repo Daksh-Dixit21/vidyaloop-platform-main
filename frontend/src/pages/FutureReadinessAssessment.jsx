@@ -200,7 +200,7 @@ const FutureReadinessAssessment = () => {
                 className="bg-blue-50/40 rounded-xl border border-premium shadow-premium p-4 flex items-center justify-center gap-3"
               >
                 <div className="flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center bg-blue-100">
-                  <q.icon className="w-4.5 h-4.5 text-blue-600" />
+                  <q.icon className="w-5 h-5 text-blue-600" />
                 </div>
                 <span className="text-sm font-semibold text-gray-800">{q.label}</span>
               </div>

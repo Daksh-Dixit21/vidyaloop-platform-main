@@ -1,111 +1,202 @@
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
 from datetime import datetime, timezone
+import csv
+import io
+import json
 import uuid
+
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi.responses import StreamingResponse
+
+from config import UPLOAD_MAX_BYTES
 from database import (
-    users_collection, schools_collection, students_collection,
-    assessments_collection, reports_collection, credentials_collection
+    assessments_collection,
+    credentials_collection,
+    question_banks_collection,
+    reports_collection,
+    schools_collection,
+    students_collection,
+    users_collection,
 )
 from services.auth_service import require_admin
-from services.csv_parser import parse_csv, validate_csv_rows, create_student_accounts
+from services.csv_parser import create_student_accounts, parse_tabular_file, validate_csv_rows
+from services.question_seed import LIKERT_OPTIONS, SECTIONS
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
 
+def scoped_school_filter(user, school_id=None):
+    admin_school_id = user.get('school_id')
+    if admin_school_id:
+        if school_id and school_id != admin_school_id:
+            raise HTTPException(status_code=403, detail="Access denied for this school")
+        return {"school_id": admin_school_id}
+    return {"school_id": school_id} if school_id else {}
+
+
+def serialize_doc(doc):
+    if not doc:
+        return doc
+    clean = dict(doc)
+    clean['_id'] = str(clean.get('_id'))
+    return clean
+
+
+def parse_bool(value):
+    if isinstance(value, bool):
+        return value
+    return str(value or '').strip().lower() in {'true', '1', 'yes', 'y'}
+
+
+def clean_question(row):
+    normalized = {str(k).strip().lower().replace(' ', '_'): v for k, v in row.items()}
+    section = str(normalized.get('section', '')).strip()
+    dimension = str(normalized.get('dimension', '')).strip()
+    text = str(normalized.get('text', normalized.get('question', ''))).strip()
+    question_type = str(normalized.get('question_type', 'likert_5')).strip() or 'likert_5'
+
+    if section not in SECTIONS:
+        raise ValueError(f"Invalid section '{section}'")
+    if not dimension or not text:
+        raise ValueError("Question must include section, dimension, and text")
+
+    options_raw = normalized.get('options', '')
+    if question_type == 'likert_5':
+        options = LIKERT_OPTIONS
+    elif isinstance(options_raw, list):
+        options = options_raw
+    else:
+        try:
+            parsed = json.loads(str(options_raw)) if str(options_raw).strip() else []
+            options = parsed if isinstance(parsed, list) else []
+        except json.JSONDecodeError:
+            pieces = [p.strip() for p in str(options_raw).split('|') if p.strip()]
+            options = [{"id": chr(97 + i), "text": piece, "value": 0} for i, piece in enumerate(pieces)]
+
+    if question_type == 'multiple_choice' and not options:
+        raise ValueError("Multiple-choice questions need options")
+
+    return {
+        "_id": str(normalized.get('_id') or normalized.get('id') or f"q_{uuid.uuid4().hex[:10]}").strip(),
+        "section": section,
+        "dimension": dimension,
+        "text": text,
+        "question_type": question_type,
+        "options": options,
+        "correct_answer": str(normalized.get('correct_answer', '')).strip() or None,
+        "reverse_scored": parse_bool(normalized.get('reverse_scored', False)),
+        "weight": float(normalized.get('weight') or 1.0),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+async def read_upload(file: UploadFile):
+    content = await file.read()
+    if len(content) > UPLOAD_MAX_BYTES:
+        raise HTTPException(status_code=413, detail="File is too large")
+    return content
+
+
 @router.post("/upload-students")
 async def upload_students(file: UploadFile = File(...), user=Depends(require_admin)):
-    if not file.filename.endswith(('.csv', '.xlsx', '.xls')):
+    if not file.filename.lower().endswith(('.csv', '.xlsx', '.xls')):
         raise HTTPException(status_code=400, detail="Only CSV and Excel files are accepted")
 
-    content = await file.read()
-    rows = parse_csv(content)
-
+    rows = parse_tabular_file(await read_upload(file), file.filename)
     if not rows:
-        raise HTTPException(status_code=400, detail="CSV file is empty or has invalid format")
+        raise HTTPException(status_code=400, detail="File is empty or has invalid format")
 
     valid_rows, errors = validate_csv_rows(rows)
-
     if not valid_rows:
         raise HTTPException(status_code=400, detail={"message": "No valid rows found", "errors": errors})
 
-    school_id = user.get('school_id', f"sch_{uuid.uuid4().hex[:8]}")
-
+    school_id = user.get('school_id') or f"sch_{uuid.uuid4().hex[:8]}"
     existing_school = await schools_collection.find_one({"_id": school_id})
     if not existing_school:
         await schools_collection.insert_one({
             "_id": school_id,
-            "name": user.get('name', 'Unknown School'),
+            "name": user.get('name', 'VidyaLoop School'),
             "contact_email": user['email'],
             "status": "active",
-            "created_at": datetime.now(timezone.utc).isoformat()
+            "created_at": datetime.now(timezone.utc).isoformat(),
         })
+        if not user.get('school_id'):
+            await users_collection.update_one({"_id": user['_id']}, {"$set": {"school_id": school_id}})
 
-    credentials = await create_student_accounts(valid_rows, school_id, user['_id'])
+    result = await create_student_accounts(valid_rows, school_id, user['_id'])
+    credentials = result['credentials']
 
     return {
         "message": f"Successfully created {len(credentials)} student accounts",
         "total_processed": len(rows),
         "successful": len(credentials),
         "errors": errors,
-        "school_id": school_id
+        "school_id": school_id,
+        "batch_id": result['batch_id'],
+        "credentials": credentials,
     }
 
 
 @router.post("/preview-csv")
 async def preview_csv(file: UploadFile = File(...), user=Depends(require_admin)):
-    content = await file.read()
-    rows = parse_csv(content)
-
+    rows = parse_tabular_file(await read_upload(file), file.filename)
     if not rows:
-        raise HTTPException(status_code=400, detail="CSV file is empty")
-
+        raise HTTPException(status_code=400, detail="File is empty")
     valid_rows, errors = validate_csv_rows(rows)
+    return {"total_rows": len(rows), "valid_rows": len(valid_rows), "errors": errors, "preview": valid_rows[:10]}
 
-    return {
-        "total_rows": len(rows),
-        "valid_rows": len(valid_rows),
-        "errors": errors,
-        "preview": valid_rows[:10]
-    }
+
+@router.get("/schools")
+async def list_schools(search: str = "", user=Depends(require_admin)):
+    query = {}
+    if user.get('school_id'):
+        query['_id'] = user['school_id']
+    if search:
+        query['name'] = {"$regex": search, "$options": "i"}
+
+    schools = await schools_collection.find(query).sort("name", 1).to_list(100)
+    results = []
+    for school in schools:
+        sid = school['_id']
+        results.append({
+            **serialize_doc(school),
+            "student_count": await students_collection.count_documents({"school_id": sid}),
+            "completed_assessments": await assessments_collection.count_documents({"school_id": sid, "status": "completed"}),
+        })
+    return {"schools": results}
 
 
 @router.get("/students")
 async def list_students(
-    page: int = 1,
-    limit: int = 20,
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
     search: str = "",
-    class_filter: int = None,
-    user=Depends(require_admin)
+    class_filter: int | None = None,
+    school_id: str | None = None,
+    user=Depends(require_admin),
 ):
-    school_id = user.get('school_id')
-    query = {"school_id": school_id} if school_id else {}
-
+    query = scoped_school_filter(user, school_id)
     if search:
         query["$or"] = [
             {"name": {"$regex": search, "$options": "i"}},
-            {"email": {"$regex": search, "$options": "i"}}
+            {"email": {"$regex": search, "$options": "i"}},
+            {"roll_number": {"$regex": search, "$options": "i"}},
         ]
-
     if class_filter:
         query["class_level"] = class_filter
 
     total = await students_collection.count_documents(query)
     skip = (page - 1) * limit
-    students = await students_collection.find(query).skip(skip).limit(limit).to_list(limit)
+    students = await students_collection.find(query).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
 
-    for s in students:
-        s['_id'] = str(s['_id'])
-        user_doc = await users_collection.find_one({"_id": s.get('user_id')})
-        s['is_active'] = user_doc.get('is_active', True) if user_doc else False
-        assessment_count = await assessments_collection.count_documents({"student_id": s['_id']})
-        s['assessment_count'] = assessment_count
+    for student in students:
+        student['_id'] = str(student['_id'])
+        user_doc = await users_collection.find_one({"_id": student.get('user_id')})
+        student['is_active'] = user_doc.get('is_active', True) if user_doc else False
+        student['assessment_count'] = await assessments_collection.count_documents({"student_id": student['_id']})
+        latest = await assessments_collection.find_one({"student_id": student['_id']}, sort=[("started_at", -1)])
+        student['latest_assessment_status'] = latest.get('status') if latest else None
 
-    return {
-        "students": students,
-        "total": total,
-        "page": page,
-        "limit": limit,
-        "total_pages": (total + limit - 1) // limit
-    }
+    return {"students": students, "total": total, "page": page, "limit": limit, "total_pages": (total + limit - 1) // limit}
 
 
 @router.get("/students/{student_id}")
@@ -113,59 +204,168 @@ async def get_student(student_id: str, user=Depends(require_admin)):
     student = await students_collection.find_one({"_id": student_id})
     if not student:
         raise HTTPException(status_code=404, detail="Student not found")
+    scoped_school_filter(user, student.get('school_id'))
 
-    assessments = await assessments_collection.find({"student_id": student_id}).to_list(100)
-    reports = await reports_collection.find({"student_id": student_id}).to_list(100)
-
-    return {
-        "student": student,
-        "assessments": assessments,
-        "reports": reports
-    }
+    assessments = await assessments_collection.find({"student_id": student_id}).sort("started_at", -1).to_list(100)
+    reports = await reports_collection.find({"student_id": student_id}).sort("generated_at", -1).to_list(100)
+    return {"student": serialize_doc(student), "assessments": [serialize_doc(a) for a in assessments], "reports": [serialize_doc(r) for r in reports]}
 
 
 @router.get("/credentials")
 async def list_credentials(user=Depends(require_admin)):
-    school_id = user.get('school_id')
-    query = {"school_id": school_id} if school_id else {}
-
+    query = scoped_school_filter(user)
     batches = await credentials_collection.find(query).sort("created_at", -1).to_list(50)
+    return {"batches": [{**serialize_doc(b), "count": len(b.get('credentials', []))} for b in batches]}
 
-    return {"batches": batches}
+
+@router.get("/credentials/{batch_id}/download")
+async def download_credentials(batch_id: str, user=Depends(require_admin)):
+    batch = await credentials_collection.find_one({"_id": batch_id})
+    if not batch:
+        raise HTTPException(status_code=404, detail="Credential batch not found")
+    scoped_school_filter(user, batch.get('school_id'))
+
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=["student_id", "name", "class_level", "section", "email", "password"])
+    writer.writeheader()
+    for credential in batch.get('credentials', []):
+        writer.writerow({key: credential.get(key, '') for key in writer.fieldnames})
+    output.seek(0)
+
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=vidyaloop_credentials_{batch_id}.csv"},
+    )
+
+
+@router.get("/assessments")
+async def list_assessments(
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    status: str = "",
+    class_filter: int | None = None,
+    school_id: str | None = None,
+    user=Depends(require_admin),
+):
+    query = scoped_school_filter(user, school_id)
+    if status:
+        query['status'] = status
+
+    student_ids = None
+    if class_filter:
+        student_query = scoped_school_filter(user, school_id)
+        student_query['class_level'] = class_filter
+        student_ids = [s['_id'] for s in await students_collection.find(student_query, {"_id": 1}).to_list(10000)]
+        query['student_id'] = {"$in": student_ids}
+
+    total = await assessments_collection.count_documents(query)
+    assessments = await assessments_collection.find(query).sort("started_at", -1).skip((page - 1) * limit).limit(limit).to_list(limit)
+    results = []
+    for assessment in assessments:
+        student = await students_collection.find_one({"_id": assessment.get('student_id')})
+        school = await schools_collection.find_one({"_id": assessment.get('school_id')}) if assessment.get('school_id') else None
+        report = await reports_collection.find_one({"assessment_id": assessment.get('_id')})
+        results.append({
+            **serialize_doc(assessment),
+            "student": serialize_doc(student) if student else None,
+            "school": serialize_doc(school) if school else None,
+            "report": serialize_doc(report) if report else None,
+            "report_id": report.get('_id') if report else None,
+        })
+    return {"assessments": results, "total": total, "page": page, "limit": limit, "total_pages": (total + limit - 1) // limit}
+
+
+@router.get("/assessments/{assessment_id}/takers")
+async def get_assessment_taker(assessment_id: str, user=Depends(require_admin)):
+    assessment = await assessments_collection.find_one({"_id": assessment_id})
+    if not assessment:
+        raise HTTPException(status_code=404, detail="Assessment not found")
+    scoped_school_filter(user, assessment.get('school_id'))
+    student = await students_collection.find_one({"_id": assessment.get('student_id')})
+    report = await reports_collection.find_one({"assessment_id": assessment_id})
+    return {"assessment": serialize_doc(assessment), "student": serialize_doc(student) if student else None, "report": serialize_doc(report) if report else None}
+
+
+@router.get("/question-bank")
+async def list_question_bank(section: str = "", user=Depends(require_admin)):
+    query = {"section": section} if section else {}
+    questions = await question_banks_collection.find(query).sort([("section", 1), ("dimension", 1)]).to_list(500)
+    return {"sections": SECTIONS, "questions": [serialize_doc(q) for q in questions]}
+
+
+@router.post("/question-bank/upload")
+async def upload_question_bank(file: UploadFile = File(...), user=Depends(require_admin)):
+    content = await read_upload(file)
+    if file.filename.lower().endswith('.json'):
+        data = json.loads(content.decode('utf-8-sig'))
+        rows = data.get('questions', data) if isinstance(data, dict) else data
+    elif file.filename.lower().endswith(('.csv', '.xlsx', '.xls')):
+        rows = parse_tabular_file(content, file.filename)
+    else:
+        raise HTTPException(status_code=400, detail="Upload JSON, CSV, or Excel question files")
+
+    if not isinstance(rows, list) or not rows:
+        raise HTTPException(status_code=400, detail="No question rows found")
+
+    upserted = 0
+    errors = []
+    for idx, row in enumerate(rows):
+        try:
+            question = clean_question(row)
+            await question_banks_collection.update_one({"_id": question['_id']}, {"$set": question}, upsert=True)
+            upserted += 1
+        except Exception as exc:
+            errors.append(f"Row {idx + 2}: {exc}")
+
+    if upserted == 0:
+        raise HTTPException(status_code=400, detail={"message": "No valid questions found", "errors": errors})
+    return {"message": f"Saved {upserted} questions", "saved": upserted, "errors": errors}
+
+
+@router.put("/question-bank/{question_id}")
+async def update_question(question_id: str, body: dict, user=Depends(require_admin)):
+    existing = await question_banks_collection.find_one({"_id": question_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Question not found")
+    merged = {**existing, **body, "_id": question_id}
+    try:
+        question = clean_question(merged)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    await question_banks_collection.update_one({"_id": question_id}, {"$set": question})
+    return {"question": serialize_doc(question)}
 
 
 @router.get("/dashboard")
 async def school_dashboard(user=Depends(require_admin)):
-    school_id = user.get('school_id')
-    query = {"school_id": school_id} if school_id else {}
-
+    query = scoped_school_filter(user)
     total_students = await students_collection.count_documents(query)
-    total_assessments = await assessments_collection.count_documents(
-        {"school_id": school_id} if school_id else {}
-    )
-    completed_assessments = await assessments_collection.count_documents({
-        **({"school_id": school_id} if school_id else {}),
-        "status": "completed"
-    })
+    total_schools = await schools_collection.count_documents({"_id": query['school_id']}) if query.get('school_id') else await schools_collection.count_documents({})
+    assessment_query = query.copy()
+    total_assessments = await assessments_collection.count_documents(assessment_query)
+    completed_assessments = await assessments_collection.count_documents({**assessment_query, "status": "completed"})
 
     pipeline = [
-        {"$match": {"status": "completed", **({"school_id": school_id} if school_id else {})}},
-        {"$group": {"_id": None, "avg_score": {"$avg": "$overall_score"}}}
+        {"$match": {"status": "completed", **assessment_query}},
+        {"$group": {"_id": None, "avg_score": {"$avg": "$overall_score"}}},
     ]
     avg_result = await assessments_collection.aggregate(pipeline).to_list(1)
     avg_score = avg_result[0]['avg_score'] if avg_result else 0
 
-    class_pipeline = [
-        {"$match": {"status": "completed", **({"school_id": school_id} if school_id else {})}},
-        {"$group": {"_id": "$assessment_type", "count": {"$sum": 1}, "avg_score": {"$avg": "$overall_score"}}}
+    grade_pipeline = [
+        {"$match": query},
+        {"$group": {"_id": "$class_level", "count": {"$sum": 1}}},
+        {"$sort": {"_id": 1}},
     ]
-    by_type = await assessments_collection.aggregate(class_pipeline).to_list(10)
+    by_grade = await students_collection.aggregate(grade_pipeline).to_list(20)
 
     return {
+        "total_schools": total_schools,
         "total_students": total_students,
         "total_assessments": total_assessments,
         "completed_assessments": completed_assessments,
         "pending_assessments": total_assessments - completed_assessments,
         "average_score": round(avg_score, 1) if avg_score else 0,
-        "by_assessment_type": by_type
+        "by_grade": by_grade,
     }

@@ -89,7 +89,7 @@ export default function AssessmentQuiz() {
     try {
       await assessmentAPI.saveSection(assessmentId, sectionKey, answers);
       const res = await assessmentAPI.submit(assessmentId);
-      navigate('/assessment/result', {
+      navigate('/student/assessment/result', {
         state: {
           assessmentId,
           scores: res.data.scores,
@@ -222,10 +222,10 @@ export default function AssessmentQuiz() {
             <div className="flex flex-wrap gap-1 mt-5 justify-center">
               {questions.map((q, i) => (
                 <div
-                  key={q._id || i}
+                  key={q.id || i}
                   className={`w-2 h-2 rounded-full transition-all ${
                     i === currentQ ? 'bg-[#4EC0F4] w-4' :
-                    answers[q._id] !== undefined ? 'bg-green-400' : 'bg-gray-200'
+                    answers[q.id] !== undefined ? 'bg-green-400' : 'bg-gray-200'
                   }`}
                 />
               ))}
@@ -264,3 +264,4 @@ export default function AssessmentQuiz() {
     </div>
   );
 }
+

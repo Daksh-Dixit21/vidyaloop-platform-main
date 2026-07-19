@@ -31,14 +31,14 @@ export default function StudentDashboard() {
     setStarting(true);
     try {
       const res = await assessmentAPI.start();
-      navigate('/assessment', { state: { assessmentId: res.data.assessment_id, progress: res.data.progress } });
+      navigate('/student/assessment', { state: { assessmentId: res.data.assessment_id, progress: res.data.progress } });
     } catch (err) { alert(err.response?.data?.detail || 'Failed to start'); }
     finally { setStarting(false); }
   };
 
   const handleContinue = () => {
     if (data?.current_assessment) {
-      navigate('/assessment', {
+      navigate('/student/assessment', {
         state: {
           assessmentId: data.current_assessment.id,
           progress: data.current_assessment.progress,
@@ -80,7 +80,7 @@ export default function StudentDashboard() {
           <h1 className="text-2xl md:text-3xl font-bold text-gray-800">
             Welcome, {student.name}!
           </h1>
-          <p className="text-gray-400 mt-1">Class {student.section || ''} {student.class_level}</p>
+          <p className="text-gray-400 mt-1">Class {student.section || ''} {student.class_level || ''}</p>
         </div>
 
         {/* Current Assessment or Start New */}
@@ -158,7 +158,11 @@ export default function StudentDashboard() {
             <h3 className="font-semibold text-gray-800 mb-3">Your Reports ({completed})</h3>
             <div className="space-y-2">
               {data?.reports?.map((r, i) => (
-                <div key={i} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+                <div
+                  key={i}
+                  onClick={() => navigate('/student/assessment/result', { state: { assessmentId: r.id } })}
+                  className="flex items-center justify-between p-3 bg-gray-50 rounded-xl hover:bg-gray-100 cursor-pointer transition"
+                >
                   <div>
                     <span className="font-medium text-sm">Comprehensive Report</span>
                     <span className="text-xs text-gray-400 ml-2">{r.completed_at?.split('T')[0]}</span>
@@ -175,3 +179,4 @@ export default function StudentDashboard() {
     </div>
   );
 }
+

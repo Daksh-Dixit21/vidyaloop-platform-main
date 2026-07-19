@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { reportAPI } from '../../services/api';
+import { assessmentAPI, reportAPI } from '../../services/api';
 
 const DIM_LABELS = {
   social_energy: 'Social Energy', conscientiousness: 'Discipline', curiosity: 'Curiosity',
@@ -31,8 +31,35 @@ export default function AssessmentResult() {
   const location = useLocation();
   const { assessmentId, scores, overall_score, report_id } = location.state || {};
   const [downloading, setDownloading] = useState(false);
+  const [fetching, setFetching] = useState(!scores && !!assessmentId);
+  const [result, setResult] = useState({ scores, overall_score, report_id });
 
-  if (!scores) {
+  useEffect(() => {
+    if (!scores && assessmentId) {
+      assessmentAPI.getResult(assessmentId)
+        .then(res => setResult({
+          scores: res.data.scores,
+          overall_score: res.data.overall_score,
+          report_id: res.data.report_id,
+        }))
+        .catch(err => console.error('Failed to load result:', err))
+        .finally(() => setFetching(false));
+    }
+  }, [assessmentId]);
+
+  const activeScores = result.scores;
+  const activeOverall = result.overall_score;
+  const activeReportId = result.report_id;
+
+  if (fetching) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-blue-50 to-indigo-50 flex items-center justify-center">
+        <div className="w-10 h-10 border-4 border-[#4EC0F4] border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!activeScores) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-blue-50 to-indigo-50 flex items-center justify-center">
         <div className="text-center p-8">
@@ -46,13 +73,26 @@ export default function AssessmentResult() {
     );
   }
 
-  const dimensions = scores.dimensions || {};
-  const themes = scores.themes || {};
-  const themeRankings = scores.theme_rankings || [];
-  const frs = scores.future_readiness_score || 0;
-  const fsi = scores.future_success_index || 0;
-  const topStrengths = scores.top_strengths || [];
-  const growthAreas = scores.growth_areas || [];
+  const dimensions = activeScores.dimensions || {};
+  const themes = activeScores.themes || {};
+  const themeRankings = activeScores.theme_rankings || [];
+  const frs = activeScores.future_readiness_score || 0;
+  const fsi = activeScores.future_success_index || 0;
+  const topStrengths = activeScores.top_strengths || [];
+  const growthAreas = activeScores.growth_areas || [];
+
+
+  const handleViewReport = async () => {
+    if (!report_id) return;
+    try {
+      const res = await reportAPI.viewReportBlob(report_id);
+      const type = res.headers['content-type'] || 'application/pdf';
+      const url = window.URL.createObjectURL(new Blob([res.data], { type }));
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } catch {
+      alert('Report not available yet');
+    }
+  };
 
   const handleDownload = async () => {
     if (!report_id) return;
@@ -199,7 +239,7 @@ export default function AssessmentResult() {
         {/* Actions */}
         <div className="flex flex-col sm:flex-row gap-3">
           <button
-            onClick={() => window.open(report_id ? reportAPI.viewReport(report_id) : '#', '_blank')}
+            onClick={handleViewReport}
             className="flex-1 py-3.5 text-sm font-semibold text-white rounded-xl shadow-lg hover:shadow-xl active:scale-[0.98] transition-all bg-gradient-to-r from-[#4EC0F4] to-blue-500"
           >
             📄 View Full Report (25+ pages)
@@ -216,3 +256,4 @@ export default function AssessmentResult() {
     </div>
   );
 }
+

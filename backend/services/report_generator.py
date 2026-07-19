@@ -580,6 +580,56 @@ li {{ margin-bottom:5px; font-size:12.5px; line-height:1.55; color:#334155; }}
 </body></html>'''
 
 
+def _generate_fallback_pdf(pdf_path, student_name, class_level, school_name, scores, assessment_date):
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import getSampleStyleSheet
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+
+    styles = getSampleStyleSheet()
+    dims = scores.get("dimensions", {})
+    theme_rankings = scores.get("theme_rankings", [])
+    overall = scores.get("overall_score", 0)
+    story = [
+        Paragraph("VidyaLoop Student Success Blueprint", styles["Title"]),
+        Spacer(1, 12),
+        Paragraph(f"Student: {student_name}", styles["Heading2"]),
+        Paragraph(f"Class {class_level} | {school_name} | {assessment_date}", styles["Normal"]),
+        Spacer(1, 18),
+        Paragraph(f"Overall Score: {overall}%", styles["Heading2"]),
+        Paragraph(f"Future Readiness Score: {scores.get('future_readiness_score', 0)}%", styles["Normal"]),
+        Paragraph(f"Future Success Index: {scores.get('future_success_index', 0)}%", styles["Normal"]),
+        Spacer(1, 18),
+        Paragraph("Top Career Themes", styles["Heading2"]),
+    ]
+
+    theme_rows = [["Theme", "Score"]] + [[t.get("theme", ""), f"{t.get('score', 0)}%"] for t in theme_rankings[:12]]
+    table = Table(theme_rows, colWidths=[320, 100])
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#4EC0F4")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#d1d5db")),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("PADDING", (0, 0), (-1, -1), 8),
+    ]))
+    story.extend([table, Spacer(1, 18), Paragraph("Dimension Scores", styles["Heading2"])])
+
+    dim_rows = [["Dimension", "Score", "Level"]]
+    for key, value in dims.items():
+        label = DIM_META.get(key, {}).get("label", key.replace("_", " ").title())
+        dim_rows.append([label, f"{value.get('normalized', 0)}%", value.get("level", "")])
+    dim_table = Table(dim_rows, colWidths=[260, 80, 100])
+    dim_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#111827")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#d1d5db")),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("PADDING", (0, 0), (-1, -1), 6),
+    ]))
+    story.append(dim_table)
+    doc = SimpleDocTemplate(pdf_path, pagesize=A4, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
+    doc.build(story)
+
 async def generate_report(assessment_id, student_id, school_id, student_name, class_level, school_name, scores):
     dims = scores.get("dimensions", {})
     if dims:
@@ -602,7 +652,10 @@ async def generate_report(assessment_id, student_id, school_id, student_name, cl
         HTML(string=html).write_pdf(pdf_path)
         final_path = pdf_path
     except Exception:
-        final_path = filepath
+        pdf_filename = filename.replace(".html", ".pdf")
+        pdf_path = os.path.join(REPORT_OUTPUT_DIR, pdf_filename)
+        _generate_fallback_pdf(pdf_path, student_name, class_level, school_name, scores, assessment_date)
+        final_path = pdf_path
 
     report_id = f"report_{uuid.uuid4().hex[:12]}"
     report_doc = {
@@ -613,3 +666,5 @@ async def generate_report(assessment_id, student_id, school_id, student_name, cl
     }
     await reports_collection.insert_one(report_doc)
     return report_doc
+
+

@@ -211,7 +211,7 @@ const Assessment = () => {
                           {option.emoji}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className={`text-sm sm:text-base lg:text-lg font-semibold transition-colors duration-200 leading-tight break-words overflow-wrap-anywhere ${
+                          <p className={`text-sm sm:text-base lg:text-lg font-semibold transition-colors duration-200 leading-tight break-words ${
                             selectedOption === option.id ? 'text-cyan-700' : 'text-gray-900 group-hover:text-cyan-600'
                           }`}>
                             {option.text}

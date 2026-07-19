@@ -1,16 +1,19 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 from database import init_db, close_db
 from services.question_seed import seed_question_bank
-from config import CORS_ORIGINS
+from config import CORS_ORIGINS, RATE_LIMIT_REQUESTS, RATE_LIMIT_WINDOW_SECONDS
 import logging
+import time
 
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+rate_limit_buckets = {}
 
 
 @asynccontextmanager
@@ -39,6 +42,30 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.middleware("http")
+async def security_and_rate_limit(request: Request, call_next):
+    client = request.client.host if request.client else "unknown"
+    now = time.time()
+    window_start = now - RATE_LIMIT_WINDOW_SECONDS
+    hits = [ts for ts in rate_limit_buckets.get(client, []) if ts > window_start]
+    if len(hits) >= RATE_LIMIT_REQUESTS:
+        return JSONResponse(
+            {"detail": "Too many requests. Please wait and try again."},
+            status_code=429,
+            headers={"Retry-After": str(RATE_LIMIT_WINDOW_SECONDS)},
+        )
+    hits.append(now)
+    rate_limit_buckets[client] = hits
+
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    if request.url.scheme == "https":
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
+
 from routes.auth import router as auth_router
 from routes.admin import router as admin_router
 from routes.students import router as students_router
@@ -64,3 +91,5 @@ async def root():
 @app.get("/api/health")
 async def health():
     return {"status": "healthy"}
+
+

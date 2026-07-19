@@ -162,23 +162,25 @@ export default function StudentDashboard() {
         </div>
 
         {/* Completed Reports */}
-        {completed > 0 && (
-          <div className="glass-card rounded-2xl p-5">
-            <h3 className="font-semibold text-gray-800 mb-3">Your Reports ({completed})</h3>
-            <div className="space-y-2">
-              {data?.reports?.map((r, i) => (
-                <div
-                  key={i}
-                  onClick={() => navigate('/student/assessment/result', { state: { assessmentId: r.id } })}
-                  className="flex items-center justify-between p-3 bg-gray-50 rounded-xl hover:bg-gray-100 cursor-pointer transition"
-                >
-                  <div>
+        {data?.reports?.length > 0 && (
+          <div className="glass-card rounded-2xl p-5 mb-8">
+            <h3 className="font-semibold text-gray-800 mb-3">Your Reports ({data.reports.length})</h3>
+            <div className="space-y-3">
+              {data.reports.map((r, i) => (
+                <div key={i} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+                  <div className="min-w-0">
                     <span className="font-medium text-sm">Comprehensive Report</span>
                     <span className="text-xs text-gray-400 ml-2">{r.completed_at?.split('T')[0]}</span>
+                    <span className="text-sm font-bold ml-3" style={{ color: r.overall_score >= 76 ? '#22c55e' : r.overall_score >= 51 ? '#3b82f6' : '#f59e0b' }}>
+                      {r.overall_score}%
+                    </span>
                   </div>
-                  <span className="text-sm font-bold" style={{ color: r.overall_score >= 76 ? '#22c55e' : r.overall_score >= 51 ? '#3b82f6' : '#f59e0b' }}>
-                    {r.overall_score}%
-                  </span>
+                  <button
+                    onClick={() => navigate('/student/assessment/result', { state: { assessmentId: r.id } })}
+                    className="shrink-0 px-4 py-1.5 text-xs font-medium bg-[#4EC0F4] text-white rounded-lg hover:bg-blue-500 transition"
+                  >
+                    View Report →
+                  </button>
                 </div>
               ))}
             </div>

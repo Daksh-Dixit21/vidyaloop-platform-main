@@ -2,7 +2,8 @@ from fastapi import APIRouter, HTTPException, Depends
 from datetime import datetime, timezone
 import uuid
 from database import (
-    assessments_collection, question_banks_collection,
+    assessment_configs_collection, assessments_collection,
+    question_banks_collection, reports_collection,
     students_collection, schools_collection
 )
 from services.auth_service import require_student
@@ -249,6 +250,8 @@ async def get_result(assessment_id: str, user=Depends(require_student)):
     if assessment['status'] != 'completed':
         raise HTTPException(status_code=400, detail="Assessment not yet completed")
 
+    report = await reports_collection.find_one({"assessment_id": assessment_id})
+
     return {
         "assessment_id": assessment['_id'],
         "status": assessment['status'],
@@ -257,4 +260,5 @@ async def get_result(assessment_id: str, user=Depends(require_student)):
         "overall_level": assessment.get('overall_level'),
         "time_spent_seconds": assessment.get('time_spent_seconds'),
         "completed_at": assessment.get('completed_at'),
+        "report_id": report['_id'] if report else None,
     }

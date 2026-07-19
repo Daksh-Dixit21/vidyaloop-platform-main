@@ -1,7 +1,10 @@
+import io
 import os
+import uuid
+import tempfile
 
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 
 from database import reports_collection, students_collection
 from services.auth_service import get_current_user
@@ -17,6 +20,31 @@ async def ensure_report_access(report: dict, user: dict):
     elif user.get('role') == 'school_admin' and user.get('school_id'):
         if report.get('school_id') != user.get('school_id'):
             raise HTTPException(status_code=403, detail="Access denied")
+
+
+def _generate_pdf_bytes(html: str) -> bytes:
+    try:
+        from weasyprint import HTML
+        return HTML(string=html).write_pdf()
+    except Exception:
+        pass
+    try:
+        from reportlab.lib.pagesizes import A4
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+        from reportlab.lib.styles import getSampleStyleSheet
+        buf = io.BytesIO()
+        doc = SimpleDocTemplate(buf, pagesize=A4)
+        styles = getSampleStyleSheet()
+        story = [Paragraph("VidyaLoop Report", styles["Title"]), Spacer(1, 12)]
+        for line in html.split('\n'):
+            line = line.strip()
+            if line and not line.startswith('<'):
+                story.append(Paragraph(line, styles["Normal"]))
+        doc.build(story)
+        return buf.getvalue()
+    except Exception:
+        pass
+    return html.encode('utf-8')
 
 
 @router.get("/{report_id}")
@@ -45,13 +73,17 @@ async def download_report(report_id: str, user=Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Report not found")
     await ensure_report_access(report, user)
 
-    pdf_path = report.get('pdf_path')
-    if not pdf_path or not os.path.exists(pdf_path):
-        raise HTTPException(status_code=404, detail="Report file not found")
+    html = report.get('html_content')
+    if not html:
+        raise HTTPException(status_code=404, detail="Report content not found")
 
-    filename = os.path.basename(pdf_path)
-    media_type = "application/pdf" if filename.endswith('.pdf') else "text/html"
-    return FileResponse(path=pdf_path, filename=filename, media_type=media_type)
+    pdf_bytes = _generate_pdf_bytes(html)
+    student_name = report.get('scores', {}).get('student_name', 'student')
+    return StreamingResponse(
+        iter([pdf_bytes]),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="VidyaLoop_Report_{student_name.replace(" ", "_")}.pdf"'},
+    )
 
 
 @router.get("/{report_id}/view")
@@ -61,11 +93,8 @@ async def view_report(report_id: str, user=Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Report not found")
     await ensure_report_access(report, user)
 
-    pdf_path = report.get('pdf_path')
-    if not pdf_path or not os.path.exists(pdf_path):
-        raise HTTPException(status_code=404, detail="Report file not found")
+    html = report.get('html_content')
+    if not html:
+        raise HTTPException(status_code=404, detail="Report content not found")
 
-    if pdf_path.endswith('.html'):
-        with open(pdf_path, 'r', encoding='utf-8') as f:
-            return HTMLResponse(content=f.read())
-    return FileResponse(path=pdf_path, media_type="application/pdf")
+    return HTMLResponse(content=html)

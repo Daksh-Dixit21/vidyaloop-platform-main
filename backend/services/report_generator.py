@@ -1,11 +1,6 @@
-import os
-import uuid
 import math
 from datetime import datetime, timezone
 from database import reports_collection
-from config import REPORT_OUTPUT_DIR
-
-os.makedirs(REPORT_OUTPUT_DIR, exist_ok=True)
 
 DIM_META = {
     "social_energy": {"label": "Social Energy", "icon": "🗣️", "section": "personality",
@@ -640,40 +635,13 @@ async def generate_report(assessment_id, student_id, school_id, student_name, cl
     assessment_date = datetime.now(timezone.utc).strftime("%B %d, %Y")
     html = _generate_html(student_name, class_level, school_name, scores, assessment_date)
 
-    filename = f"VL_{student_id[:8]}_{assessment_id[:8]}_{uuid.uuid4().hex[:6]}.html"
-    filepath = os.path.join(REPORT_OUTPUT_DIR, filename)
-    with open(filepath, "w", encoding="utf-8") as f:
-        f.write(html)
-
-    pdf_path = None
-    try:
-        from weasyprint import HTML
-        pdf_filename = filename.replace(".html", ".pdf")
-        pdf_path = os.path.join(REPORT_OUTPUT_DIR, pdf_filename)
-        HTML(string=html).write_pdf(pdf_path)
-    except Exception:
-        try:
-            pdf_filename = filename.replace(".html", ".pdf")
-            pdf_path = os.path.join(REPORT_OUTPUT_DIR, pdf_filename)
-            _generate_fallback_pdf(pdf_path, student_name, class_level, school_name, scores, assessment_date)
-        except Exception:
-            pdf_path = None
-    if not pdf_path or not os.path.exists(pdf_path):
-        txt_filename = filename.replace(".html", ".txt")
-        pdf_path = os.path.join(REPORT_OUTPUT_DIR, txt_filename)
-        with open(pdf_path, "w", encoding="utf-8") as f:
-            f.write(f"VidyaLoop Report for {student_name}\n")
-            f.write(f"Class {class_level} | {school_name} | {assessment_date}\n\n")
-            dims = scores.get("dimensions", {})
-            for key, val in dims.items():
-                label = DIM_META.get(key, {}).get("label", key)
-                f.write(f"{label}: {val.get('normalized', 0)}% ({val.get('level', '')})\n")
-
     report_id = f"report_{uuid.uuid4().hex[:12]}"
     report_doc = {
         "_id": report_id, "assessment_id": assessment_id, "student_id": student_id,
-        "school_id": school_id, "report_type": "comprehensive", "pdf_path": final_path,
-        "page_count": 30, "file_size": os.path.getsize(final_path),
+        "school_id": school_id, "report_type": "comprehensive",
+        "html_content": html,
+        "page_count": 30,
+        "file_size": len(html.encode("utf-8")),
         "generated_at": datetime.now(timezone.utc).isoformat(), "status": "ready", "scores": scores,
     }
     await reports_collection.insert_one(report_doc)

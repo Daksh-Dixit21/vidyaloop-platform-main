@@ -346,15 +346,16 @@ def calculate_all_scores(answers: Dict[str, Any], questions: List[Dict]) -> Dict
     dims = list(set(q["dimension"] for q in questions))
     for dim in dims:
         dim_qs = [q for q in questions if q["dimension"] == dim]
+        if not dim_qs:
+            continue
         raw = 0.0
-        max_raw = 0.0
+        is_mc = dim_qs[0]["question_type"] == "multiple_choice"
         for q in dim_qs:
             q_id = q["_id"]
             ans = answers.get(q_id)
-            max_raw += 5.0
             if ans is None:
                 continue
-            if q["question_type"] == "multiple_choice":
+            if is_mc:
                 if ans == q.get("correct_answer"):
                     raw += 1.0
             else:
@@ -362,7 +363,7 @@ def calculate_all_scores(answers: Dict[str, Any], questions: List[Dict]) -> Dict
                 if q.get("reverse_scored"):
                     score = 6 - score
                 raw += float(score)
-        if q["question_type"] == "multiple_choice":
+        if is_mc:
             norm = normalize_mc(raw)
         else:
             norm = normalize_likert(raw)

@@ -645,17 +645,29 @@ async def generate_report(assessment_id, student_id, school_id, student_name, cl
     with open(filepath, "w", encoding="utf-8") as f:
         f.write(html)
 
+    pdf_path = None
     try:
         from weasyprint import HTML
         pdf_filename = filename.replace(".html", ".pdf")
         pdf_path = os.path.join(REPORT_OUTPUT_DIR, pdf_filename)
         HTML(string=html).write_pdf(pdf_path)
-        final_path = pdf_path
     except Exception:
-        pdf_filename = filename.replace(".html", ".pdf")
-        pdf_path = os.path.join(REPORT_OUTPUT_DIR, pdf_filename)
-        _generate_fallback_pdf(pdf_path, student_name, class_level, school_name, scores, assessment_date)
-        final_path = pdf_path
+        try:
+            pdf_filename = filename.replace(".html", ".pdf")
+            pdf_path = os.path.join(REPORT_OUTPUT_DIR, pdf_filename)
+            _generate_fallback_pdf(pdf_path, student_name, class_level, school_name, scores, assessment_date)
+        except Exception:
+            pdf_path = None
+    if not pdf_path or not os.path.exists(pdf_path):
+        txt_filename = filename.replace(".html", ".txt")
+        pdf_path = os.path.join(REPORT_OUTPUT_DIR, txt_filename)
+        with open(pdf_path, "w", encoding="utf-8") as f:
+            f.write(f"VidyaLoop Report for {student_name}\n")
+            f.write(f"Class {class_level} | {school_name} | {assessment_date}\n\n")
+            dims = scores.get("dimensions", {})
+            for key, val in dims.items():
+                label = DIM_META.get(key, {}).get("label", key)
+                f.write(f"{label}: {val.get('normalized', 0)}% ({val.get('level', '')})\n")
 
     report_id = f"report_{uuid.uuid4().hex[:12]}"
     report_doc = {

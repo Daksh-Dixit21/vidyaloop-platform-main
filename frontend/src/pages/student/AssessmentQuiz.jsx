@@ -97,7 +97,10 @@ export default function AssessmentQuiz() {
           report_id: res.data.report_id,
         }
       });
-    } catch (err) { alert('Submission failed'); }
+    } catch (err) {
+      const detail = err.response?.data?.detail || err.message || 'Submission failed';
+      alert(typeof detail === 'string' ? detail : JSON.stringify(detail));
+    }
   };
 
   if (loading) {
@@ -236,9 +239,13 @@ export default function AssessmentQuiz() {
               <button
                 onClick={handleSaveProgress}
                 disabled={saving || answeredCount === 0}
-                className="px-4 py-2 text-sm font-medium text-gray-500 bg-white rounded-xl border hover:bg-gray-50 transition disabled:opacity-40"
+                className={`px-4 py-2 text-sm font-medium rounded-xl transition disabled:opacity-40 ${
+                  currentQ === questions.length - 1
+                    ? 'bg-[#4EC0F4] text-white hover:bg-blue-500 shadow-sm'
+                    : 'text-gray-500 bg-white border hover:bg-gray-50'
+                }`}
               >
-                {saving ? 'Saving...' : '💾 Save Progress'}
+                {saving ? 'Saving...' : currentQ === questions.length - 1 ? '✅ Save & Continue →' : '💾 Save Progress'}
               </button>
               <span className="text-xs text-gray-400">{answeredCount}/{questions.length} answered</span>
             </div>

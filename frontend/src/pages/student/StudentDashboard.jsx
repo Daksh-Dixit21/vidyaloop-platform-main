@@ -31,19 +31,30 @@ export default function StudentDashboard() {
     setStarting(true);
     try {
       const res = await assessmentAPI.start();
-      navigate('/student/assessment', { state: { assessmentId: res.data.assessment_id, progress: res.data.progress } });
+      navigate('/student/assessment', { state: { assessmentId: res.data.assessment_id, progress: res.data.progress, answers: res.data.answers } });
     } catch (err) { alert(err.response?.data?.detail || 'Failed to start'); }
     finally { setStarting(false); }
   };
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     if (data?.current_assessment) {
-      navigate('/student/assessment', {
-        state: {
-          assessmentId: data.current_assessment.id,
-          progress: data.current_assessment.progress,
-        }
-      });
+      try {
+        const res = await assessmentAPI.start();
+        navigate('/student/assessment', {
+          state: {
+            assessmentId: data.current_assessment.id,
+            progress: data.current_assessment.progress,
+            answers: res.data.answers,
+          }
+        });
+      } catch {
+        navigate('/student/assessment', {
+          state: {
+            assessmentId: data.current_assessment.id,
+            progress: data.current_assessment.progress,
+          }
+        });
+      }
     }
   };
 
@@ -83,9 +94,9 @@ export default function StudentDashboard() {
           <p className="text-gray-400 mt-1">Class {student.section || ''} {student.class_level || ''}</p>
         </div>
 
-        {/* Current Assessment or Start New */}
-        {current ? (
-          <div className="glass-card rounded-2xl p-6 mb-8 border-l-4 border-[#4EC0F4]">
+        {/* Current Assessment or Start/Retake */}
+        <div className="glass-card rounded-2xl p-6 mb-8 border-l-4" style={{ borderColor: current ? '#4EC0F4' : completed > 0 ? '#22c55e' : '#4EC0F4' }}>
+          {current ? (
             <div className="flex items-start justify-between">
               <div>
                 <h3 className="font-semibold text-gray-800 mb-1">Assessment In Progress</h3>
@@ -102,26 +113,24 @@ export default function StudentDashboard() {
                 Continue →
               </button>
             </div>
-          </div>
-        ) : (
-          <div className="glass-card rounded-2xl p-6 mb-8">
-            <div className="text-center">
-              <div className="w-20 h-20 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-[#4EC0F4] to-blue-500 flex items-center justify-center text-4xl shadow-lg">
-                🎯
+          ) : (
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-xl font-bold text-gray-800 mb-1">
+                  {completed > 0 ? 'Take Another Assessment' : 'Take Your Assessment'}
+                </h3>
+                <p className="text-gray-400 text-sm">22 Dimensions · 12 Career Themes · 4 Sections</p>
               </div>
-              <h3 className="text-xl font-bold text-gray-800 mb-2">Take Your Assessment</h3>
-              <p className="text-gray-400 text-sm mb-1">22 Dimensions | 12 Career Themes | 4 Sections</p>
-              <p className="text-gray-400 text-sm mb-6">Comprehensive Student Success Blueprint</p>
               <button
                 onClick={handleStart}
                 disabled={starting}
-                className="px-8 py-3 bg-gradient-to-r from-[#4EC0F4] to-blue-500 text-white font-semibold rounded-xl hover:shadow-lg hover:shadow-cyan-200/50 transition-all disabled:opacity-50 active:scale-[0.98]"
+                className="px-6 py-2.5 bg-gradient-to-r from-[#4EC0F4] to-blue-500 text-white font-semibold rounded-xl hover:shadow-lg transition-all disabled:opacity-50 active:scale-[0.98] whitespace-nowrap"
               >
-                {starting ? 'Starting...' : 'Start Assessment'}
+                {starting ? 'Starting...' : completed > 0 ? 'Retake →' : 'Start →'}
               </button>
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* Section Cards */}
         <h3 className="text-lg font-semibold text-gray-800 mb-4">Assessment Sections</h3>

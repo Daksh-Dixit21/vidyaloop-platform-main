@@ -104,6 +104,7 @@ async def start_assessment(user=Depends(require_student)):
             "status": existing['status'],
             "started_at": existing.get('started_at'),
             "progress": existing.get('progress', {}),
+            "answers": existing.get('answers', {}),
         }
 
     assessment_id = f"assess_{uuid.uuid4().hex[:12]}"

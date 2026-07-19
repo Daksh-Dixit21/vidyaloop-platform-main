@@ -26,12 +26,12 @@ const DIM_LABELS = {
 export default function AssessmentQuiz() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { assessmentId, progress: initialProgress } = location.state || {};
+  const { assessmentId, progress: initialProgress, answers: initialAnswers } = location.state || {};
 
   const [currentSectionIdx, setCurrentSectionIdx] = useState(0);
   const [questions, setQuestions] = useState([]);
   const [currentQ, setCurrentQ] = useState(0);
-  const [answers, setAnswers] = useState({});
+  const [allAnswers, setAllAnswers] = useState(initialAnswers || {});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -42,23 +42,29 @@ export default function AssessmentQuiz() {
 
   useEffect(() => {
     if (!assessmentId) { navigate('/student/dashboard'); return; }
-    loadSection();
-  }, [currentSectionIdx]);
+    const firstIncomplete = SECTIONS.findIndex(s => !progress[s.key]);
+    if (firstIncomplete > 0) setCurrentSectionIdx(firstIncomplete);
+    loadSection(SECTIONS[firstIncomplete > 0 ? firstIncomplete : 0].key);
+  }, []);
 
-  const loadSection = async () => {
+  const loadSection = async (key) => {
     setLoading(true);
     try {
-      const res = await assessmentAPI.getSectionQuestions(SECTIONS[currentSectionIdx].key);
+      const res = await assessmentAPI.getSectionQuestions(key);
       setQuestions(res.data.questions);
       setCurrentQ(0);
-      setAnswers({});
       setSectionComplete(false);
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
   };
 
+  const sectionAnswers = questions.reduce((acc, q) => {
+    if (allAnswers[q.id] !== undefined) acc[q.id] = allAnswers[q.id];
+    return acc;
+  }, {});
+
   const handleAnswer = useCallback((questionId, answer) => {
-    setAnswers(prev => ({ ...prev, [questionId]: answer }));
+    setAllAnswers(prev => ({ ...prev, [questionId]: answer }));
     setTimeout(() => {
       if (currentQ < questions.length - 1) {
         setCurrentQ(prev => prev + 1);
@@ -69,7 +75,7 @@ export default function AssessmentQuiz() {
   const handleSaveProgress = async () => {
     setSaving(true);
     try {
-      const res = await assessmentAPI.saveSection(assessmentId, sectionKey, answers);
+      const res = await assessmentAPI.saveSection(assessmentId, sectionKey, sectionAnswers);
       setProgress(res.data.progress);
       setSectionComplete(true);
     } catch (err) { alert('Failed to save'); }
@@ -78,7 +84,9 @@ export default function AssessmentQuiz() {
 
   const handleNextSection = () => {
     if (currentSectionIdx < SECTIONS.length - 1) {
-      setCurrentSectionIdx(prev => prev + 1);
+      const nextIdx = currentSectionIdx + 1;
+      setCurrentSectionIdx(nextIdx);
+      loadSection(SECTIONS[nextIdx].key);
     } else {
       setShowConfirm(true);
     }
@@ -87,7 +95,7 @@ export default function AssessmentQuiz() {
   const handleSubmitAll = async () => {
     setShowConfirm(false);
     try {
-      await assessmentAPI.saveSection(assessmentId, sectionKey, answers);
+      await assessmentAPI.saveSection(assessmentId, sectionKey, sectionAnswers);
       const res = await assessmentAPI.submit(assessmentId);
       navigate('/student/assessment/result', {
         state: {
@@ -113,8 +121,9 @@ export default function AssessmentQuiz() {
 
   const question = questions[currentQ];
   const sec = SECTIONS[currentSectionIdx];
+  const answeredCount = Object.keys(sectionAnswers).length;
+  const allAnswered = questions.length > 0 && answeredCount >= questions.length;
   const progressPct = ((currentQ + 1) / questions.length) * 100;
-  const answeredCount = Object.keys(answers).length;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-blue-50 to-indigo-50">
@@ -190,13 +199,13 @@ export default function AssessmentQuiz() {
                     key={opt.id}
                     onClick={() => handleAnswer(question.id, opt.id)}
                     className={`w-full text-left px-4 py-3.5 rounded-xl border-2 transition-all text-sm font-medium ${
-                      answers[question.id] === opt.id
+                      sectionAnswers[question.id] === opt.id
                         ? 'border-[#4EC0F4] bg-cyan-50 text-[#4EC0F4]'
                         : 'border-gray-100 bg-white/60 hover:border-gray-200 hover:bg-white'
                     }`}
                   >
                     <span className="inline-block w-6 h-6 rounded-full border-2 mr-3 text-center leading-6 text-xs font-bold"
-                      style={answers[question.id] === opt.id ? { borderColor: '#4EC0F4', color: '#4EC0F4' } : { borderColor: '#d1d5db', color: '#9ca3af' }}>
+                      style={sectionAnswers[question.id] === opt.id ? { borderColor: '#4EC0F4', color: '#4EC0F4' } : { borderColor: '#d1d5db', color: '#9ca3af' }}>
                       {opt.id.toUpperCase()}
                     </span>
                     {opt.text}
@@ -210,7 +219,7 @@ export default function AssessmentQuiz() {
                     key={opt.id}
                     onClick={() => handleAnswer(question.id, opt.value)}
                     className={`flex-1 min-w-[80px] py-3 px-2 rounded-xl border-2 text-center transition-all ${
-                      answers[question.id] === opt.value
+                      sectionAnswers[question.id] === opt.value
                         ? 'border-[#4EC0F4] bg-cyan-50 text-[#4EC0F4] font-semibold'
                         : 'border-gray-100 bg-white/60 hover:border-gray-200 text-gray-500'
                     }`}
@@ -228,24 +237,24 @@ export default function AssessmentQuiz() {
                   key={q.id || i}
                   className={`w-2 h-2 rounded-full transition-all ${
                     i === currentQ ? 'bg-[#4EC0F4] w-4' :
-                    answers[q.id] !== undefined ? 'bg-green-400' : 'bg-gray-200'
+                    sectionAnswers[q.id] !== undefined ? 'bg-green-400' : 'bg-gray-200'
                   }`}
                 />
               ))}
             </div>
 
-            {/* Save Progress */}
+            {/* Save Progress — all questions must be answered */}
             <div className="flex justify-between items-center mt-6">
               <button
                 onClick={handleSaveProgress}
-                disabled={saving || answeredCount === 0}
+                disabled={saving || !allAnswered}
                 className={`px-4 py-2 text-sm font-medium rounded-xl transition disabled:opacity-40 ${
-                  currentQ === questions.length - 1
+                  allAnswered
                     ? 'bg-[#4EC0F4] text-white hover:bg-blue-500 shadow-sm'
-                    : 'text-gray-500 bg-white border hover:bg-gray-50'
+                    : 'text-gray-400 bg-gray-100 border cursor-not-allowed'
                 }`}
               >
-                {saving ? 'Saving...' : currentQ === questions.length - 1 ? '✅ Save & Continue →' : '💾 Save Progress'}
+                {saving ? 'Saving...' : allAnswered ? '✅ Save & Continue →' : `Answer all ${questions.length} questions to continue`}
               </button>
               <span className="text-xs text-gray-400">{answeredCount}/{questions.length} answered</span>
             </div>

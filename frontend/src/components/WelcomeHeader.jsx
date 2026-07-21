@@ -1,14 +1,14 @@
 import React from 'react';
-import { userData } from '../data/mockData';
+import { userData as fallback } from '../data/mockData';
 import { Flame, Clock, TrendingUp } from 'lucide-react';
 
-const WelcomeHeader = () => {
-  const { name, class: className, school, stats } = userData;
+const WelcomeHeader = ({ userInfo }) => {
+  const data = userInfo || fallback;
+  const { name, class: className, school, stats } = data;
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 p-6 sm:p-8 shadow-sm hover:shadow-md transition-shadow duration-300">
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-        {/* Left side - Welcome message */}
         <div className="flex-1">
           <p className="text-sm text-gray-500 font-medium mb-2">Good morning</p>
           <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
@@ -16,10 +16,8 @@ const WelcomeHeader = () => {
           </h1>
           <p className="text-base text-gray-600">{className} · {school}</p>
         </div>
-        
-        {/* Right side - Stats cards */}
+
         <div className="grid grid-cols-3 gap-3 sm:gap-4">
-          {/* Streak */}
           <div className="bg-white rounded-xl px-4 py-4 border border-premium shadow-premium hover:shadow-premium-md color-transition">
             <div className="flex flex-col items-center gap-2">
               <div className="w-10 h-10 rounded-full bg-orange-50 flex items-center justify-center">
@@ -29,8 +27,7 @@ const WelcomeHeader = () => {
               <p className="text-xs text-gray-600 font-medium">day streak</p>
             </div>
           </div>
-          
-          {/* Hours this week */}
+
           <div className="bg-white rounded-xl px-4 py-4 border border-premium shadow-premium hover:shadow-premium-md color-transition">
             <div className="flex flex-col items-center gap-2">
               <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center">
@@ -40,8 +37,7 @@ const WelcomeHeader = () => {
               <p className="text-xs text-gray-600 font-medium">this week</p>
             </div>
           </div>
-          
-          {/* Ranking */}
+
           <div className="bg-white rounded-xl px-4 py-4 border border-premium shadow-premium hover:shadow-premium-md color-transition">
             <div className="flex flex-col items-center gap-2">
               <div className="w-10 h-10 rounded-full bg-green-50 flex items-center justify-center">

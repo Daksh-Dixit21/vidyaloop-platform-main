@@ -1,9 +1,12 @@
 import React from 'react';
-import { learningDNA } from '../data/mockData';
+import { learningDNA as fallback } from '../data/mockData';
 import SkillBar from './SkillBar';
 import { Sparkles } from 'lucide-react';
 
-const LearningDNA = () => {
+const LearningDNA = ({ strengths, weaknesses }) => {
+  const s = strengths || fallback.strengths;
+  const w = weaknesses || fallback.weaknesses;
+
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6 mb-4 sm:mb-6">
       <div className="flex items-center gap-2 mb-4 sm:mb-6">
@@ -15,21 +18,19 @@ const LearningDNA = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
-        {/* Strengths - Green tones */}
         <div>
           <h3 className="text-sm font-semibold text-gray-700 mb-3 sm:mb-4">Your Strengths</h3>
           <div className="space-y-3 sm:space-y-4">
-            {learningDNA.strengths.map((skill) => (
+            {s.map((skill) => (
               <SkillBar key={skill.name} {...skill} color="bg-green-600" />
             ))}
           </div>
         </div>
 
-        {/* Areas to Improve - Softer blue tone */}
         <div>
           <h3 className="text-sm font-semibold text-gray-700 mb-3 sm:mb-4">Areas to Improve</h3>
           <div className="space-y-3 sm:space-y-4">
-            {learningDNA.weaknesses.map((skill) => (
+            {w.map((skill) => (
               <SkillBar key={skill.name} {...skill} color="bg-blue-400" />
             ))}
           </div>

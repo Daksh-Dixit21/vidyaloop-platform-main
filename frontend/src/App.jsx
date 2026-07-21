@@ -35,7 +35,7 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={<Homepage />} />
-      <Route path="/dashboard" element={<Dashboard />} />
+      <Route path="/dashboard" element={<ProtectedRoute requiredRole="student"><Dashboard /></ProtectedRoute>} />
       <Route path="/assessment" element={<Assessment />} />
       <Route path="/course" element={<Course />} />
       <Route path="/stem-learning" element={<CourseBrowse />} />

@@ -79,8 +79,17 @@ app.include_router(assessments_router)
 app.include_router(reports_router)
 
 
-@app.get("/api/")
+@app.get("/")
 async def root():
+    return {
+        "message": "VidyaLoop API is running",
+        "version": "1.0.0",
+        "docs": "/docs"
+    }
+
+
+@app.get("/api/")
+async def api_root():
     return {
         "message": "VidyaLoop API is running",
         "version": "1.0.0",
@@ -90,6 +99,10 @@ async def root():
 
 @app.get("/api/health")
 async def health():
+    return {"status": "healthy"}
+
+@app.get("/health")
+async def health_root():
     return {"status": "healthy"}
 
 

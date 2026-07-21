@@ -61,8 +61,8 @@ function AppRoutes() {
       <Route path="/student/dashboard" element={
         <ProtectedRoute requiredRole="student"><StudentDashboard /></ProtectedRoute>
       } />
-      <Route path="/personality-assessment/start" element={<Navigate to="/student/assessment" />} />
-      <Route path="/future-readiness-assessment/start" element={<Navigate to="/student/assessment" />} />
+      <Route path="/personality-assessment/start" element={<Navigate to="/personality-assessment" />} />
+      <Route path="/future-readiness-assessment/start" element={<Navigate to="/future-readiness-assessment" />} />
 
       <Route path="/student/assessment" element={
         <ProtectedRoute requiredRole="student"><AssessmentQuiz /></ProtectedRoute>

@@ -1,6 +1,8 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '../components/DashboardLayout';
+import { useAuth } from '../context/AuthContext';
+import { assessmentAPI } from '../services/api';
 import {
   Compass,
   MessageSquare,
@@ -17,6 +19,7 @@ import {
   TrendingUp,
   Map,
   Sparkles,
+  Loader2,
 } from 'lucide-react';
 
 const dimensions = [
@@ -127,6 +130,29 @@ const FeatureCard = ({ icon: Icon, title, description, borderTop, iconBg, iconCo
 );
 
 const FutureReadinessAssessment = () => {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [starting, setStarting] = useState(false);
+
+  const handleStart = async () => {
+    if (!user) { navigate('/student/login'); return; }
+    setStarting(true);
+    try {
+      const res = await assessmentAPI.start();
+      navigate('/student/assessment', {
+        state: {
+          assessmentId: res.data.assessment_id,
+          progress: res.data.progress,
+          answers: res.data.answers,
+        }
+      });
+    } catch (err) {
+      alert(err.response?.data?.detail || 'Failed to start assessment');
+    } finally {
+      setStarting(false);
+    }
+  };
+
   return (
     <DashboardLayout>
       <div className="max-w-5xl mx-auto page-fade-in" data-testid="future-readiness-page">
@@ -232,16 +258,21 @@ const FutureReadinessAssessment = () => {
 
         {/* Primary CTA */}
         <section className="text-center py-4 sm:py-6">
-          <Link
-            to="/future-readiness-assessment/start"
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 sm:px-10 py-3.5 sm:py-4 text-white rounded-xl font-bold text-base sm:text-lg hover:shadow-2xl hover:scale-105 transition-all duration-300 shadow-lg"
+          <button
+            onClick={handleStart}
+            disabled={starting}
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 sm:px-10 py-3.5 sm:py-4 text-white rounded-xl font-bold text-base sm:text-lg hover:shadow-2xl hover:scale-105 transition-all duration-300 shadow-lg disabled:opacity-60"
             style={{ background: '#4EC0F4' }}
             data-testid="future-readiness-start-cta"
           >
-            <Sparkles className="w-5 h-5" />
-            <span>See How Future-Ready You Are</span>
+            {starting ? (
+              <Loader2 className="w-5 h-5 animate-spin" />
+            ) : (
+              <Sparkles className="w-5 h-5" />
+            )}
+            <span>{starting ? 'Starting...' : 'See How Future-Ready You Are'}</span>
             <ArrowRight className="w-5 h-5" />
-          </Link>
+          </button>
         </section>
       </div>
     </DashboardLayout>

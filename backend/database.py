@@ -22,7 +22,7 @@ credentials_collection = db['credentials']
 assessment_configs_collection = db['assessment_configs']
 
 async def init_db():
-    await users_collection.create_index('email', unique=True)
+    await users_collection.create_index('email', unique=True, sparse=True)
     await students_collection.create_index('user_id')
     await students_collection.create_index('school_id')
     await students_collection.create_index([('school_id', 1), ('class_level', 1)])

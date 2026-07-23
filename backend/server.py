@@ -2,11 +2,14 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
-from database import init_db, close_db
+from database import init_db, close_db, users_collection
+from services.auth_service import hash_password
 from services.question_seed import seed_question_bank
 from config import CORS_ORIGINS, RATE_LIMIT_REQUESTS, RATE_LIMIT_WINDOW_SECONDS
 import logging
 import time
+import uuid
+from datetime import datetime, timezone
 
 logging.basicConfig(
     level=logging.INFO,
@@ -16,12 +19,32 @@ logger = logging.getLogger(__name__)
 rate_limit_buckets = {}
 
 
+async def seed_admin():
+    existing = await users_collection.find_one({"email": "admin@vidyaloop.com"})
+    if existing:
+        return
+    admin_id = f"usr_admin_{uuid.uuid4().hex[:8]}"
+    await users_collection.insert_one({
+        "_id": admin_id,
+        "email": "admin@vidyaloop.com",
+        "password": hash_password("admin123"),
+        "name": "VidyaLoop Admin",
+        "role": "school_admin",
+        "school_id": None,
+        "first_login": False,
+        "is_active": True,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    logger.info("Seeded admin account: admin@vidyaloop.com / admin123")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting VidyaLoop API server...")
     await init_db()
+    await seed_admin()
     await seed_question_bank()
-    logger.info("Database initialized and question bank seeded")
+    logger.info("Database initialized, admin seeded, question bank ready")
     yield
     logger.info("Shutting down...")
     await close_db()

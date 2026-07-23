@@ -99,14 +99,37 @@ async def read_upload(file: UploadFile):
     return content
 
 
+def _extract_school_name(file_content: bytes, filename: str) -> str:
+    """Try to extract school name from the first line of the CSV/Excel file."""
+    try:
+        if filename.lower().endswith(('.xlsx', '.xls')):
+            from openpyxl import load_workbook
+            wb = load_workbook(io.BytesIO(file_content), read_only=True, data_only=True)
+            sheet = wb.active
+            first_row = next(sheet.iter_rows(max_row=1, values_only=True), None)
+            if first_row and first_row[0]:
+                name = str(first_row[0]).strip().strip('"').strip()
+                if len(name) > 3 and len(name) < 100 and not name[0].isdigit():
+                    return name
+        else:
+            text = file_content.decode('utf-8-sig')
+            first_line = text.split('\n', 1)[0].strip().strip('"').strip()
+            if first_line and len(first_line) > 3 and len(first_line) < 100 and not first_line[0].isdigit():
+                return first_line
+    except Exception:
+        pass
+    return ''
+
+
 @router.post("/upload-students")
 async def upload_students(file: UploadFile = File(...), user=Depends(require_admin)):
     if not file.filename.lower().endswith(('.csv', '.xlsx', '.xls')):
         raise HTTPException(status_code=400, detail="Only CSV and Excel files are accepted")
 
-    rows = parse_tabular_file(await read_upload(file), file.filename)
+    file_content = await read_upload(file)
+    rows = parse_tabular_file(file_content, file.filename)
     if not rows:
-        raise HTTPException(status_code=400, detail="File is empty or has invalid format")
+        raise HTTPException(status_code=400, detail="File is empty or has invalid format. Expected columns: Student Name, Class (e.g. V-A, XII-B)")
 
     valid_rows, errors = validate_csv_rows(rows)
     if not valid_rows:
@@ -115,9 +138,10 @@ async def upload_students(file: UploadFile = File(...), user=Depends(require_adm
     school_id = user.get('school_id') or f"sch_{uuid.uuid4().hex[:8]}"
     existing_school = await schools_collection.find_one({"_id": school_id})
     if not existing_school:
+        school_name = _extract_school_name(file_content, file.filename) or user.get('name', 'VidyaLoop School')
         await schools_collection.insert_one({
             "_id": school_id,
-            "name": user.get('name', 'VidyaLoop School'),
+            "name": school_name,
             "contact_email": user.get('email', ''),
             "status": "active",
             "created_at": datetime.now(timezone.utc).isoformat(),
@@ -129,9 +153,10 @@ async def upload_students(file: UploadFile = File(...), user=Depends(require_adm
     credentials = result['credentials']
 
     return {
-        "message": f"Successfully created {len(credentials)} student accounts",
+        "message": f"Successfully created {len(credentials)} student accounts with login credentials",
         "total_processed": len(rows),
         "successful": len(credentials),
+        "skipped": len(rows) - len(valid_rows),
         "errors": errors,
         "school_id": school_id,
         "batch_id": result['batch_id'],
@@ -141,11 +166,19 @@ async def upload_students(file: UploadFile = File(...), user=Depends(require_adm
 
 @router.post("/preview-csv")
 async def preview_csv(file: UploadFile = File(...), user=Depends(require_admin)):
-    rows = parse_tabular_file(await read_upload(file), file.filename)
+    file_content = await read_upload(file)
+    rows = parse_tabular_file(file_content, file.filename)
     if not rows:
-        raise HTTPException(status_code=400, detail="File is empty")
+        raise HTTPException(status_code=400, detail="File is empty or has invalid format")
     valid_rows, errors = validate_csv_rows(rows)
-    return {"total_rows": len(rows), "valid_rows": len(valid_rows), "errors": errors, "preview": valid_rows[:10]}
+    school_name = _extract_school_name(file_content, file.filename)
+    return {
+        "total_rows": len(rows),
+        "valid_rows": len(valid_rows),
+        "errors": errors,
+        "school_name": school_name,
+        "preview": valid_rows[:20],
+    }
 
 
 @router.get("/schools")
@@ -230,7 +263,8 @@ async def download_credentials(batch_id: str, user=Depends(require_admin)):
     scoped_school_filter(user, batch.get('school_id'))
 
     output = io.StringIO()
-    writer = csv.DictWriter(output, fieldnames=["student_id", "name", "class_level", "section", "username", "password"])
+    fieldnames = ["student_id", "name", "class_level", "section", "username", "password"]
+    writer = csv.DictWriter(output, fieldnames=fieldnames)
     writer.writeheader()
     for credential in batch.get('credentials', []):
         row_dict = {key: credential.get(key, '') for key in writer.fieldnames}
@@ -257,6 +291,38 @@ async def download_credentials(batch_id: str, user=Depends(require_admin)):
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename=vidyaloop_credentials_{batch_id}.csv"},
     )
+
+
+@router.get("/credentials/{batch_id}/preview")
+async def preview_credentials(batch_id: str, user=Depends(require_admin)):
+    """Preview the first 20 credentials in a batch without downloading."""
+    batch = await credentials_collection.find_one({"_id": batch_id})
+    if not batch:
+        raise HTTPException(status_code=404, detail="Credential batch not found")
+    scoped_school_filter(user, batch.get('school_id'))
+
+    all_creds = batch.get('credentials', [])
+    preview = []
+    for c in all_creds[:20]:
+        username = c.get('username', '')
+        if not username:
+            student_doc = await students_collection.find_one({"_id": c.get('student_id')}) if c.get('student_id') else None
+            user_doc = await users_collection.find_one({"_id": c.get('user_id')}) if c.get('user_id') else None
+            username = (student_doc.get('username') if student_doc else None) or (user_doc.get('username') if user_doc else '') or ''
+        preview.append({
+            "name": c.get('name', ''),
+            "class_level": c.get('class_level', ''),
+            "section": c.get('section', ''),
+            "username": username,
+            "password": c.get('password', ''),
+        })
+
+    return {
+        "batch_id": batch_id,
+        "total": len(all_creds),
+        "preview": preview,
+        "created_at": batch.get('created_at', ''),
+    }
 
 
 @router.get("/assessments")

@@ -51,6 +51,7 @@ export const adminAPI = {
   getStudent: (id) => api.get(`/api/admin/students/${id}`),
   getCredentials: () => api.get('/api/admin/credentials'),
   downloadCredentials: (batchId) => api.get(`/api/admin/credentials/${batchId}/download`, { responseType: 'blob' }),
+  previewCredentials: (batchId) => api.get(`/api/admin/credentials/${batchId}/preview`),
   getAssessments: (params) => api.get('/api/admin/assessments', { params }),
   getAssessmentTaker: (id) => api.get(`/api/admin/assessments/${id}/takers`),
   getQuestionBank: (params) => api.get('/api/admin/question-bank', { params }),

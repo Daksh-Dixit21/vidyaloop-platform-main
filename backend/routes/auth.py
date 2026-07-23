@@ -10,7 +10,8 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 def public_user(user: dict, first_login_override=None):
     return {
         "id": user['_id'],
-        "email": user['email'],
+        "email": user.get('email'),
+        "username": user.get('username'),
         "name": user['name'],
         "role": user['role'],
         "school_id": user.get('school_id'),
@@ -21,9 +22,18 @@ def public_user(user: dict, first_login_override=None):
 
 @router.post("/login")
 async def login(credentials: UserLogin):
-    user = await users_collection.find_one({"email": credentials.email})
+    identifier = (credentials.username or credentials.email or "").strip()
+    if not identifier:
+        raise HTTPException(status_code=400, detail="Username is required")
+
+    user = await users_collection.find_one({
+        "$or": [
+            {"username": identifier},
+            {"email": identifier}
+        ]
+    })
     if not user or not verify_password(credentials.password, user['password']):
-        raise HTTPException(status_code=401, detail="Invalid email or password")
+        raise HTTPException(status_code=401, detail="Invalid username or password")
     if not user.get('is_active', True):
         raise HTTPException(status_code=403, detail="Account is disabled")
 
@@ -32,7 +42,11 @@ async def login(credentials: UserLogin):
 
 @router.post("/admin/login")
 async def admin_login(credentials: UserLogin):
-    user = await users_collection.find_one({"email": credentials.email, "role": "school_admin"})
+    identifier = (credentials.email or credentials.username or "").strip()
+    user = await users_collection.find_one({
+        "email": identifier,
+        "role": "school_admin"
+    })
     if not user or not verify_password(credentials.password, user['password']):
         raise HTTPException(status_code=401, detail="Invalid admin credentials")
     if not user.get('is_active', True):

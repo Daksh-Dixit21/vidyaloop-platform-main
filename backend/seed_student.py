@@ -12,11 +12,23 @@ from datetime import datetime, timezone
 async def create_dummy_student():
     await init_db()
 
+    username = "student"
     email = "student@demo.com"
-    existing_user = await users_collection.find_one({"email": email})
+    existing_user = await users_collection.find_one({"$or": [{"username": username}, {"email": email}]})
     if existing_user:
-        print(f"Student already exists: {email}")
+        await users_collection.update_one(
+            {"_id": existing_user["_id"]},
+            {"$set": {"username": username, "password": hash_password("demo1234"), "name": "Ananya Iyer", "is_active": True}}
+        )
+        print("=" * 50)
+        print("Demo student updated/reset!")
+        print("=" * 50)
+        print("Username: student")
         print("Password: demo1234")
+        print("Role:     student")
+        print("Name:     Ananya Iyer")
+        print("=" * 50)
+        print("Login at: http://localhost:3000/student/login")
         return
 
     school_id = "sch_demo"
@@ -35,9 +47,9 @@ async def create_dummy_student():
 
     await users_collection.insert_one({
         "_id": user_id,
-        "email": email,
+        "username": username,
         "password": hash_password("demo1234"),
-        "name": "Aarav Sharma",
+        "name": "Ananya Iyer",
         "role": "student",
         "student_id": student_id,
         "school_id": school_id,
@@ -49,13 +61,13 @@ async def create_dummy_student():
     await students_collection.insert_one({
         "_id": student_id,
         "user_id": user_id,
-        "name": "Aarav Sharma",
-        "email": email,
+        "name": "Ananya Iyer",
+        "username": username,
         "class_level": 10,
-        "section": "A",
-        "roll_number": "DEMO001",
+        "section": "B",
+        "roll_number": "DEMO002",
         "school_id": school_id,
-        "gender": "Male",
+        "gender": "Female",
         "is_active": True,
         "created_at": datetime.now(timezone.utc).isoformat()
     })
@@ -63,11 +75,11 @@ async def create_dummy_student():
     print("=" * 50)
     print("Dummy student created!")
     print("=" * 50)
-    print(f"Email:    student@demo.com")
+    print(f"Username: student")
     print(f"Password: demo1234")
     print(f"Role:     student")
-    print(f"Name:     Aarav Sharma")
-    print(f"Class:    10-A")
+    print(f"Name:     Ananya Iyer")
+    print(f"Class:    10-B")
     print("=" * 50)
     print("Login at: http://localhost:3000/student/login")
 

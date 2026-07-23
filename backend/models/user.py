@@ -11,14 +11,16 @@ class UserRole(str, Enum):
 
 class UserBase(BaseModel):
     model_config = ConfigDict(extra="ignore")
-    email: str
+    email: Optional[str] = None
+    username: Optional[str] = None
     name: str
     role: UserRole
 
 
 class UserCreate(BaseModel):
     model_config = ConfigDict(extra="ignore")
-    email: str
+    email: Optional[str] = None
+    username: Optional[str] = None
     password: str
     name: str
     role: UserRole = UserRole.STUDENT
@@ -26,14 +28,16 @@ class UserCreate(BaseModel):
 
 class UserLogin(BaseModel):
     model_config = ConfigDict(extra="ignore")
-    email: str
+    username: Optional[str] = None
+    email: Optional[str] = None
     password: str
 
 
 class UserResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(alias="_id")
-    email: str
+    email: Optional[str] = None
+    username: Optional[str] = None
     name: str
     role: UserRole
     school_id: Optional[str] = None

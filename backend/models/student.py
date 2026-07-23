@@ -13,14 +13,16 @@ class StudentBase(BaseModel):
 
 
 class StudentCreate(StudentBase):
-    email: str
+    username: Optional[str] = None
+    email: Optional[str] = None
 
 
 class StudentResponse(StudentBase):
     id: str = Field(alias="_id")
     user_id: str
     school_id: str
-    email: str
+    username: Optional[str] = None
+    email: Optional[str] = None
     assigned_by: Optional[str] = None
     created_at: str
     assessment_count: int = 0

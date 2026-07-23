@@ -118,7 +118,7 @@ async def upload_students(file: UploadFile = File(...), user=Depends(require_adm
         await schools_collection.insert_one({
             "_id": school_id,
             "name": user.get('name', 'VidyaLoop School'),
-            "contact_email": user['email'],
+            "contact_email": user.get('email', ''),
             "status": "active",
             "created_at": datetime.now(timezone.utc).isoformat(),
         })
@@ -181,7 +181,7 @@ async def list_students(
     if search:
         query["$or"] = [
             {"name": {"$regex": search, "$options": "i"}},
-            {"email": {"$regex": search, "$options": "i"}},
+            {"username": {"$regex": search, "$options": "i"}},
             {"roll_number": {"$regex": search, "$options": "i"}},
         ]
     if class_filter:
@@ -194,6 +194,7 @@ async def list_students(
     for student in students:
         student['_id'] = str(student['_id'])
         user_doc = await users_collection.find_one({"_id": student.get('user_id')})
+        student['username'] = student.get('username') or (user_doc.get('username') if user_doc else '')
         student['is_active'] = user_doc.get('is_active', True) if user_doc else False
         student['assessment_count'] = await assessments_collection.count_documents({"student_id": student['_id']})
         latest = await assessments_collection.find_one({"student_id": student['_id']}, sort=[("started_at", -1)])
@@ -229,10 +230,26 @@ async def download_credentials(batch_id: str, user=Depends(require_admin)):
     scoped_school_filter(user, batch.get('school_id'))
 
     output = io.StringIO()
-    writer = csv.DictWriter(output, fieldnames=["student_id", "name", "class_level", "section", "email", "password"])
+    writer = csv.DictWriter(output, fieldnames=["student_id", "name", "class_level", "section", "username", "password"])
     writer.writeheader()
     for credential in batch.get('credentials', []):
-        writer.writerow({key: credential.get(key, '') for key in writer.fieldnames})
+        row_dict = {key: credential.get(key, '') for key in writer.fieldnames}
+        if not row_dict.get('username'):
+            student_id = credential.get('student_id')
+            user_id = credential.get('user_id')
+            student_doc = await students_collection.find_one({"_id": student_id}) if student_id else None
+            user_doc = await users_collection.find_one({"_id": user_id}) if user_id else None
+            found_username = (student_doc.get('username') if student_doc else None) or (user_doc.get('username') if user_doc else None)
+            if not found_username:
+                clean_n = str(credential.get('name', 'student')).lower().replace(' ', '').replace('.', '')
+                clean_n = ''.join(c for c in clean_n if c.isalnum()) or 'student'
+                cls = credential.get('class_level', '')
+                found_username = f"{clean_n}{cls}"
+            row_dict['username'] = found_username
+
+        if not row_dict.get('password'):
+            row_dict['password'] = "demo1234"
+        writer.writerow(row_dict)
     output.seek(0)
 
     return StreamingResponse(

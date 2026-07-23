@@ -174,11 +174,11 @@ export default function SchoolDashboard() {
   };
 
   const downloadStudentTemplate = () => {
-    const header = 'name,class,section,roll_number,email,gender';
+    const header = 'name,class,section,roll_number,username,gender';
     const rows = [
-      'Aarav Sharma,10,A,DEMO001,,',
-      'Priya Singh,9,B,DEMO002,,',
-      'Rohan Mehta,11,C,DEMO003,,',
+      'Aarav Sharma,10,A,DEMO001,aarav10_1,Male',
+      'Priya Singh,9,B,DEMO002,priya9_2,Female',
+      'Rohan Mehta,11,C,DEMO003,rohan11_3,Male',
     ];
     const csv = [header, ...rows].join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
@@ -307,7 +307,7 @@ export default function SchoolDashboard() {
           <div className="space-y-3 sm:space-y-4">
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 sm:p-6">
               <h3 className="font-semibold text-gray-800 mb-1 sm:mb-2 text-sm sm:text-base">Upload Students</h3>
-              <p className="text-xs sm:text-sm text-gray-500 mb-3 sm:mb-4">Upload CSV or Excel with columns: name, class, section, roll_number, email, gender. Student accounts are seeded into MongoDB and a credential CSV is generated.</p>
+              <p className="text-xs sm:text-sm text-gray-500 mb-3 sm:mb-4">Upload CSV or Excel with columns: name, class, section, roll_number, username (optional), gender. Student accounts are seeded into MongoDB with usernames and a credential CSV is generated.</p>
               <div className="flex flex-wrap gap-2">
                 <input ref={fileInputRef} type="file" accept=".csv,.xlsx,.xls" onChange={handleStudentUpload} className="hidden" id="student-upload" />
                 <label htmlFor="student-upload" className="inline-flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-3 bg-gradient-to-r from-[#4EC0F4] to-blue-500 text-white rounded-lg sm:rounded-xl font-semibold text-xs sm:text-sm cursor-pointer justify-center"><FileUp size={16} /> {uploading ? 'Uploading...' : 'Upload file'}</label>
@@ -337,9 +337,9 @@ function StudentsTable({ students }) {
             <div key={s._id} className="p-3 space-y-1">
               <p className="font-medium text-sm text-gray-800">{s.name}</p>
               <div className="flex flex-wrap gap-2 text-xs text-gray-500">
+                <span>Username: <strong className="text-gray-700">{s.username}</strong></span>
                 <span>Grade {s.class_level}</span>
                 <span>Sec {s.section || '-'}</span>
-                <span>{s.email}</span>
                 <span>{s.assessment_count || 0} assessments</span>
                 <span>{s.latest_assessment_status || '-'}</span>
               </div>
@@ -351,9 +351,9 @@ function StudentsTable({ students }) {
           <thead className="bg-gray-50">
             <tr>
               <th className="text-left px-4 py-3 text-sm text-gray-500">Name</th>
+              <th className="text-left px-4 py-3 text-sm text-gray-500">Username</th>
               <th className="text-left px-4 py-3 text-sm text-gray-500">Grade</th>
               <th className="text-left px-4 py-3 text-sm text-gray-500">Section</th>
-              <th className="text-left px-4 py-3 text-sm text-gray-500">Email</th>
               <th className="text-left px-4 py-3 text-sm text-gray-500">Assessments</th>
               <th className="text-left px-4 py-3 text-sm text-gray-500">Latest</th>
             </tr>
@@ -361,9 +361,9 @@ function StudentsTable({ students }) {
           <tbody className="divide-y">{students.map((s) => (
             <tr key={s._id} className="hover:bg-gray-50">
               <td className="px-4 py-3 text-sm font-medium text-gray-800">{s.name}</td>
+              <td className="px-4 py-3 text-sm font-semibold text-blue-600">{s.username}</td>
               <td className="px-4 py-3 text-sm text-gray-600">{s.class_level}</td>
               <td className="px-4 py-3 text-sm text-gray-600">{s.section || '-'}</td>
-              <td className="px-4 py-3 text-sm text-gray-600">{s.email}</td>
               <td className="px-4 py-3 text-sm text-gray-600">{s.assessment_count || 0}</td>
               <td className="px-4 py-3 text-sm text-gray-600">{s.latest_assessment_status || '-'}</td>
             </tr>

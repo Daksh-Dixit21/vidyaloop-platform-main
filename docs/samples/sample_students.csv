@@ -1,11 +1,11 @@
-name,class,section,roll_number,email
-Aarav Sharma,10,A,1,aarav.sharma@student.edu
-Priya Patel,10,A,2,priya.patel@student.edu
-Rohan Gupta,10,B,3,rohan.gupta@student.edu
-Ananya Singh,9,A,4,ananya.singh@student.edu
-Arjun Kumar,9,B,5,arjun.kumar@student.edu
-Diya Reddy,11,A,6,diya.reddy@student.edu
-Karan Joshi,11,A,7,karan.joshi@student.edu
-Nisha Verma,11,B,8,nisha.verma@student.edu
-Vikram Rao,12,A,9,vikram.rao@student.edu
-Sneha Iyer,12,B,10,sneha.iyer@student.edu
+name,class,section,roll_number,gender
+Aarav Sharma,10,A,1,Male
+Priya Patel,10,A,2,Female
+Rohan Gupta,10,B,3,Male
+Ananya Singh,9,A,4,Female
+Arjun Kumar,9,B,5,Male
+Diya Reddy,11,A,6,Female
+Karan Joshi,11,A,7,Male
+Nisha Verma,11,B,8,Female
+Vikram Rao,12,A,9,Male
+Sneha Iyer,12,B,10,Female

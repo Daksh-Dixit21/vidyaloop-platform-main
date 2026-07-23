@@ -3,7 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 
 export default function StudentLogin() {
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -16,10 +16,10 @@ export default function StudentLogin() {
     setError('');
     setLoading(true);
     try {
-      const userData = await login(email, password, false);
+      const userData = await login(username, password, false);
       navigate(userData.first_login ? '/change-password' : '/student/dashboard');
     } catch (err) {
-      setError(err.response?.data?.detail || 'Invalid email or password');
+      setError(err.response?.data?.detail || 'Invalid username or password');
     } finally {
       setLoading(false);
     }
@@ -58,13 +58,13 @@ export default function StudentLogin() {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-600 mb-1.5">Email Address</label>
+              <label className="block text-sm font-medium text-gray-600 mb-1.5">Username</label>
               <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
                 className="w-full px-4 py-3 bg-white/60 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#4EC0F4]/50 focus:border-[#4EC0F4] transition placeholder-gray-300"
-                placeholder="you@school.edu"
+                placeholder="Enter your username (e.g., student10_1)"
                 required
               />
             </div>

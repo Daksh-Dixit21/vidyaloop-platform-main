@@ -24,10 +24,10 @@ export function AuthProvider({ children }) {
     }
   }, [token]);
 
-  const login = async (email, password, isAdmin = false) => {
+  const login = async (identifier, password, isAdmin = false) => {
     const res = isAdmin
-      ? await authAPI.adminLogin(email, password)
-      : await authAPI.login(email, password);
+      ? await authAPI.adminLogin(identifier, password)
+      : await authAPI.login(identifier, password);
 
     const { token: newToken, user: userData } = res.data;
     localStorage.setItem('vidyaloop_token', newToken);

@@ -73,7 +73,7 @@ def validate_csv_rows(rows: List[Dict]) -> Tuple[List[Dict], List[str]]:
             'class_level': class_num,
             'section': normalized.get('section', ''),
             'roll_number': normalized.get('roll_number', normalized.get('roll_no', '')),
-            'email': normalized.get('email', ''),
+            'username': normalized.get('username', ''),
             'gender': normalized.get('gender', ''),
         })
 
@@ -86,31 +86,29 @@ def generate_password(name: str, class_level: int) -> str:
     return f"VL-{class_level}-{token}"
 
 
-def generate_email(name: str, school_id: str, index: int) -> str:
-    clean_name = name.lower().replace(' ', '.').replace('.', '')
+def generate_username(name: str, class_level: int, index: int) -> str:
+    clean_name = name.lower().replace(' ', '').replace('.', '')
     clean_name = ''.join(c for c in clean_name if c.isalnum()) or 'student'
-    return f"{clean_name}_{index}@vidyaloop.local"
+    return f"{clean_name}{class_level}_{index}"
 
 
 async def create_student_accounts(valid_rows: List[Dict], school_id: str, admin_id: str) -> Dict:
     credentials = []
-    school_prefix = school_id[:8]
     now = datetime.now(timezone.utc).isoformat()
 
     for i, row in enumerate(valid_rows):
-        email = row.get('email') or generate_email(row['name'], school_prefix, i + 1)
+        username = row.get('username') or generate_username(row['name'], row['class_level'], i + 1)
         password = generate_password(row['name'], row['class_level'])
         user_id = f"usr_{uuid.uuid4().hex[:12]}"
         student_id = f"stu_{uuid.uuid4().hex[:12]}"
 
-        existing = await users_collection.find_one({"email": email})
-        if existing:
-            local = email.split('@')[0]
-            email = f"{local}_{uuid.uuid4().hex[:5]}@vidyaloop.local"
+        existing_user = await users_collection.find_one({"username": username})
+        if existing_user:
+            username = f"{username}_{uuid.uuid4().hex[:4]}"
 
         user_doc = {
             "_id": user_id,
-            "email": email,
+            "username": username,
             "password": hash_password(password),
             "name": row['name'],
             "role": "student",
@@ -131,7 +129,7 @@ async def create_student_accounts(valid_rows: List[Dict], school_id: str, admin_
             "section": row.get('section', ''),
             "roll_number": row.get('roll_number', ''),
             "gender": row.get('gender', ''),
-            "email": email,
+            "username": username,
             "assigned_by": admin_id,
             "created_at": now,
         }
@@ -139,7 +137,7 @@ async def create_student_accounts(valid_rows: List[Dict], school_id: str, admin_
 
         credentials.append({
             "name": row['name'],
-            "email": email,
+            "username": username,
             "password": password,
             "class_level": row['class_level'],
             "section": row.get('section', ''),
